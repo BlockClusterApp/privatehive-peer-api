@@ -1,10 +1,13 @@
 const shell = require('shelljs')
 const toPascalCase = require('to-pascal-case')
 const fs = require('fs')
+const app = require('express')()
 
 const orgName = toPascalCase(process.env.ORG_NAME)
 const mode = process.env.MODE || 'orderer'
-const shareFileDir = process.env.SHARE_FILE_DIR || './crypto/' //Make it /etc/hyperledger during deployment
+const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' //Make it /etc/hyperledger during deployment
+const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
+const ordererPort = process.env.ORDERER_PORT || 7050
 
 if(mode === 'orderer') {
   if(!fs.existsSync(shareFileDir)) {
@@ -24,7 +27,7 @@ if(mode === 'orderer') {
     shell.mkdir('-p', shareFileDir)
     shell.cd(shareFileDir)
     fs.writeFileSync('./crypto-config.yaml', cryptoConfigYaml)
-    shell.exec('cryptogen generate --config=./crypto-config.yaml')
+    console.log(shell.exec('cryptogen generate --config=./crypto-config.yaml'))
 
     const configTxYaml = `
     Organizations:
@@ -42,7 +45,7 @@ if(mode === 'orderer') {
         Orderer:
           OrdererType: solo
           Addresses:
-              - orderer.${orgName.toLowerCase()}.com:7050
+              - ${workerNodeIP}:${ordererPort}
           BatchTimeout: 2s
           BatchSize:
               MaxMessageCount: 10
@@ -79,3 +82,5 @@ if(mode === 'orderer') {
     })
   }
 }
+
+app.listen(3000, () => console.log('Init script running'))

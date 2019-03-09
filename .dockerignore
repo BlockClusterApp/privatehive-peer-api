@@ -1,0 +1,4 @@
+.git
+.gitignore
+.dockerignore
+src/node_modules/*
