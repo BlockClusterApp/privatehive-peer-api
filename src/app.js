@@ -10,7 +10,7 @@ const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
 const ordererPort = process.env.ORDERER_PORT || 7050
 
 if(mode === 'orderer') {
-  if(!fs.existsSync(shareFileDir)) {
+  if(!fs.existsSync(shareFileDir + "initCompleted")) {
     const cryptoConfigYaml = `
     OrdererOrgs:
     - Name: ${orgName}
@@ -27,7 +27,7 @@ if(mode === 'orderer') {
     shell.mkdir('-p', shareFileDir)
     shell.cd(shareFileDir)
     fs.writeFileSync('./crypto-config.yaml', cryptoConfigYaml)
-    console.log(shell.exec('cryptogen generate --config=./crypto-config.yaml'))
+    shell.exec('cryptogen generate --config=./crypto-config.yaml')
 
     const configTxYaml = `
     Organizations:
@@ -80,6 +80,8 @@ if(mode === 'orderer') {
         shell.exec(`mv crypto-config/peerOrganizations/peer.blockcluster.com/ca/${fileName} crypto-config/peerOrganizations/peer.blockcluster.com/ca/privateKey`)
       }
     })
+
+    fs.writeFileSync('./initCompleted', "initCompleted")
   }
 }
 
