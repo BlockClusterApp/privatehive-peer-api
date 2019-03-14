@@ -5,6 +5,8 @@ require('./apis')
 
 const orgName = toPascalCase(process.env.ORG_NAME)
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto'
+const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
+const anchorPort = process.env.ANCHOR_PORT
 
 if(!fs.existsSync(shareFileDir + "initCompleted")) {
   const cryptoConfigYaml = `
@@ -28,7 +30,9 @@ if(!fs.existsSync(shareFileDir + "initCompleted")) {
       Name: ${orgName}
       ID: ${orgName}
       MSPDir: crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/msp
-    
+      AnchorPeers:
+        - Host: ${workerNodeIP}
+          Port: ${anchorPort}
     Profiles:
       OneOrgChannel:
         Consortium: SingleMemberConsortium
