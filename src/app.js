@@ -121,7 +121,7 @@ if(!fs.existsSync(shareFileDir + "initCompleted")) {
       `ca-${orgName.toLowerCase()}`
     ],
     "adminPrivateKey": {
-      "path": `crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/keystore/privatekey`
+      "path": `crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/keystore/privateKey`
     },
     "signedCert": {
       "path": `crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/signcerts/Admin@peer.${orgName.toLowerCase()}.com-cert.pem`

@@ -5,9 +5,12 @@ const shell = require('shelljs')
 const yamlJs = require('yamljs');
 const jsYaml = require('js-yaml');
 let hfc = require('fabric-client');
+let bodyParser = require('body-parser')
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
+
+app.use(bodyParser.json())
 
 app.get('/channelConfigCerts', (req, res) => {
   let result = {}
@@ -24,7 +27,7 @@ app.post('/createChannel', async (req, res) => {
   let ordererOrgName = req.body.ordererOrgName
 
   shell.cd(shareFileDir)
-  shell.exec(`configtxgen -profile OneOrgChannel -outputCreateChannelTx ./${channelName}.tx -channelID ${channelName}`)
+  shell.exec(`FABRIC_CFG_PATH=$PWD configtxgen -profile OneOrgChannel -outputCreateChannelTx ./${channelName}.tx -channelID ${channelName}`)
 
   let networkMap = jsYaml.safeLoad(fs.readFileSync('./network-map.yaml', 'utf8'));
 
@@ -46,14 +49,16 @@ app.post('/createChannel', async (req, res) => {
       "eventSource": true
     }
 
+    networkMap.channels[channelName].chaincodes = ["mycc:v0"]
+
     networkMap = yamlJs.stringify(networkMap);
     fs.writeFileSync('./network-map.yaml', networkMap)
 
     //create the channel now
-    hfc.setConfigSetting('network-map', shareFileDir + "network-map.yaml");
+    hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
     let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
     await client.initCredentialStores();
-    let envelope = fs.readFileSync(`${sahreFileDir}/${channelName}.tx`);
+    let envelope = fs.readFileSync(`${shareFileDir}/${channelName}.tx`);
     let channelConfig = client.extractChannelConfig(envelope);
     let signature = client.signChannelConfig(channelConfig);
     let request = {
@@ -70,6 +75,8 @@ app.post('/createChannel', async (req, res) => {
 		} else {
       res.send({error: true, message: 'Failed to create channel'})
 		}
+  } else {
+    res.send({error: true, message: 'Channel already exists'})
   }
 })
 
