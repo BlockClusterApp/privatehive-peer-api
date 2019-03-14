@@ -63,5 +63,89 @@ if(!fs.existsSync(shareFileDir + "initCompleted")) {
     }
   })
 
+  files = fs.readdirSync(`crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/keystore/`)
+  files.forEach(fileName => {
+    if(fileName.indexOf('_sk') > -1) {
+      shell.exec(`mv crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/keystore/${fileName} crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/keystore/privateKey`)
+    }
+  })
+
+  let networkMap = {
+    "name": "privatehive",
+    "x-type": "hlfv1",
+    "version": "1.0",
+    "channels": {
+      /*
+      "sample": {
+        "orderers": [
+          "orderer.blockcluster.com"
+        ],
+        "peers": {
+          "peer0.peer.blockcluster.com": {
+            "chaincodeQuery": true,
+            "ledgerQuery": true,
+            "eventSource": true
+          }
+        },
+        "chaincodes": [
+          "mycc:v0"
+        ]
+      }
+      */
+    },
+    "organizations": {},
+    "orderers": {},
+    "peers": {},
+    "certificateAuthorities": {},
+    "client": {
+      "organization": orgName,
+      "credentialStore": {
+        "path": `./fabric-client-kv-${orgName.toLowerCase()}`,
+        "cryptoStore": {
+          "path": `./fabric-client-kv-${orgName.toLowerCase()}`
+        },
+        "wallet": "wallet-name"
+      }
+    }
+  }
+
+  networkMap.organizations[orgName] = {
+    "mspid": orgName,
+    "peers": [
+      `peer0.peer.${orgName.toLowerCase()}.com`
+    ],
+    "certificateAuthorities": [
+      `ca-${orgName.toLowerCase()}`
+    ],
+    "adminPrivateKey": {
+      "path": `crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/keystore/privatekey`
+    },
+    "signedCert": {
+      "path": `crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/signcerts/Admin@peer.${orgName.toLowerCase()}.com-cert.pem`
+    }
+  }
+
+  networkMap.peers[`peer0.peer.${orgName.toLowerCase()}.com`] =  {
+    "url": "grpc://localhost:7051"
+  }
+
+  networkMap.certificateAuthorities[`ca-${orgName.toLowerCase()}`] = {
+    "url": "http://localhost:7054",
+    "httpOptions": {
+      "verify": false
+    },
+    "registrar": [
+      {
+        "enrollId": "admin",
+        "enrollSecret": "adminpw"
+      }
+    ],
+    "caName": `ca-${orgName.toLowerCase()}`
+  }
+
+  networkMap = YAML.stringify(networkMap, 2);
+
+  fs.writeFileSync('./network-map.yaml', networkMap)
+
   fs.writeFileSync('./initCompleted', "initCompleted")
 }
