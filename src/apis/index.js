@@ -2,12 +2,12 @@ const app = require('express')()
 const fs = require('fs')
 const toPascalCase = require('to-pascal-case')
 const shell = require('shelljs')
-const yaml = require('yamljs');
+const yamlJs = require('yamljs');
+const jsYaml = require('js-yaml');
+let hfc = require('fabric-client');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
-
-let resetPeerFile
 
 app.get('/channelConfigCerts', (req, res) => {
   let result = {}
@@ -18,12 +18,59 @@ app.get('/channelConfigCerts', (req, res) => {
   res.send(result)
 })
 
-app.post('/createChannel', (req, res) => {
+app.post('/createChannel', async (req, res) => {
   let channelName = req.body.name.toLowerCase()
-  let orderer = req.body.orderer
+  let ordererURL = req.body.ordererURL
+  let ordererOrgName = req.body.ordererOrgName
 
   shell.cd(shareFileDir)
   shell.exec(`configtxgen -profile OneOrgChannel -outputCreateChannelTx ./${channelName}.tx -channelID ${channelName}`)
+
+  let networkMap = jsYaml.safeLoad(fs.readFileSync('./network-map.yaml', 'utf8'));
+
+  if(!networkMap.channels[channelName]) {
+    networkMap.channels[channelName] = {
+      "orderers": [
+        `orderer.${ordererOrgName}.com`
+      ],
+      "peers": {}
+    }
+
+    networkMap.orderers[`orderer.${ordererOrgName}.com`] = {
+      "url": `grpc://${ordererURL}`
+    }
+
+    networkMap.channels[channelName].peers[`peer0.peer.${orgName.toLowerCase()}.com`] = {
+      "chaincodeQuery": true,
+      "ledgerQuery": true,
+      "eventSource": true
+    }
+
+    networkMap = yamlJs.stringify(networkMap);
+    fs.writeFileSync('./network-map.yaml', networkMap)
+
+    //create the channel now
+    hfc.setConfigSetting('network-map', shareFileDir + "network-map.yaml");
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    let envelope = fs.readFileSync(`${sahreFileDir}/${channelName}.tx`);
+    let channelConfig = client.extractChannelConfig(envelope);
+    let signature = client.signChannelConfig(channelConfig);
+    let request = {
+      config: channelConfig,
+      signatures: [signature],
+      name: channelName,
+      txId: client.newTransactionID(true)
+    };
+    
+    var response = await client.createChannel(request)
+
+    if (response && response.status === 'SUCCESS') {
+      res.send({message: 'Channel created successfully'})
+		} else {
+      res.send({error: true, message: 'Failed to create channel'})
+		}
+  }
 })
 
 app.listen(3000, () => console.log('API Server Running'))

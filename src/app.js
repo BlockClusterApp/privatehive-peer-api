@@ -1,10 +1,12 @@
 const shell = require('shelljs')
 const toPascalCase = require('to-pascal-case')
 const fs = require('fs')
-const yaml = require('json2yaml');
+const yamlJs = require('yamljs');
+const jsYaml = require('js-yaml');
+
 require('./apis')
 
-const orgName = toPascalCase(process.env.ORG_NAME)
+const orgName = toPascalCase(process.env.ORG_NAME) || 'Blockcluster'
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto'
 const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
 const anchorPort = process.env.ANCHOR_PORT || 7051
@@ -144,9 +146,8 @@ if(!fs.existsSync(shareFileDir + "initCompleted")) {
     "caName": `ca-${orgName.toLowerCase()}`
   }
 
-  networkMap = yaml.stringify(networkMap);
+  networkMap = yamlJs.stringify(networkMap);
 
   fs.writeFileSync('./network-map.yaml', networkMap)
-
   fs.writeFileSync('./initCompleted', "initCompleted")
 }
