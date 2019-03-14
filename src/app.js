@@ -1,12 +1,13 @@
 const shell = require('shelljs')
 const toPascalCase = require('to-pascal-case')
 const fs = require('fs')
+const yaml = require('json2yaml');
 require('./apis')
 
 const orgName = toPascalCase(process.env.ORG_NAME)
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto'
 const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
-const anchorPort = process.env.ANCHOR_PORT
+const anchorPort = process.env.ANCHOR_PORT || 7051
 
 if(!fs.existsSync(shareFileDir + "initCompleted")) {
   const cryptoConfigYaml = `
@@ -143,7 +144,7 @@ if(!fs.existsSync(shareFileDir + "initCompleted")) {
     "caName": `ca-${orgName.toLowerCase()}`
   }
 
-  networkMap = YAML.stringify(networkMap, 2);
+  networkMap = yaml.stringify(networkMap);
 
   fs.writeFileSync('./network-map.yaml', networkMap)
 

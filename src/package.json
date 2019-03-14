@@ -1,8 +1,8 @@
 {
   "dependencies": {
     "express": "^4.16.4",
+    "json2yaml": "^1.1.0",
     "shelljs": "^0.8.3",
-    "yamljs": "^0.3.0",
     "to-pascal-case": "^1.0.0"
   }
 }

@@ -20,11 +20,10 @@ app.get('/channelConfigCerts', (req, res) => {
 
 app.post('/createChannel', (req, res) => {
   let channelName = req.body.name.toLowerCase()
+  let orderer = req.body.orderer
 
   shell.cd(shareFileDir)
   shell.exec(`configtxgen -profile OneOrgChannel -outputCreateChannelTx ./${channelName}.tx -channelID ${channelName}`)
-
-
 })
 
 app.listen(3000, () => console.log('API Server Running'))
