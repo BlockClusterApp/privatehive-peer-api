@@ -2,7 +2,6 @@ const shell = require('shelljs')
 const toPascalCase = require('to-pascal-case')
 const fs = require('fs')
 var yamlJs = require('json2yaml')
-const jsYaml = require('js-yaml');
 
 require('./apis')
 
@@ -151,3 +150,5 @@ if(!fs.existsSync(shareFileDir + "initCompleted")) {
   fs.writeFileSync('./network-map.yaml', networkMap)
   fs.writeFileSync('./initCompleted', "initCompleted")
 }
+
+//spawn('configtxlator start &');

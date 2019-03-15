@@ -1170,6 +1170,10 @@ sjcl@1.0.7:
   version "1.0.7"
   resolved "https://registry.yarnpkg.com/sjcl/-/sjcl-1.0.7.tgz#32b365a50dc9bba26b88ba3c9df8ea34217d9f45"
 
+sleep-async@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/sleep-async/-/sleep-async-1.0.5.tgz#efa3c6b0597d8af2e1d84115e7de5b935c7c5abd"
+
 sprintf-js@~1.0.2:
   version "1.0.3"
   resolved "https://registry.yarnpkg.com/sprintf-js/-/sprintf-js-1.0.3.tgz#04e6926f662895354f3dd015203633b857297e2c"
@@ -1397,13 +1401,6 @@ y18n@^3.2.0:
 yallist@^3.0.0, yallist@^3.0.2:
   version "3.0.3"
   resolved "https://registry.yarnpkg.com/yallist/-/yallist-3.0.3.tgz#b4b049e314be545e3ce802236d6cd22cd91c3de9"
-
-yamljs@^0.3.0:
-  version "0.3.0"
-  resolved "https://registry.yarnpkg.com/yamljs/-/yamljs-0.3.0.tgz#dc060bf267447b39f7304e9b2bfbe8b5a7ddb03b"
-  dependencies:
-    argparse "^1.0.7"
-    glob "^7.0.5"
 
 yargs@^3.10.0, yargs@^3.19.0:
   version "3.32.0"
