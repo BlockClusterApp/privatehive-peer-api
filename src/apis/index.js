@@ -2,7 +2,7 @@ const app = require('express')()
 const fs = require('fs')
 const toPascalCase = require('to-pascal-case')
 const shell = require('shelljs')
-const yamlJs = require('yamljs');
+var yamlJs = require('json2yaml')
 const jsYaml = require('js-yaml');
 let hfc = require('fabric-client');
 let bodyParser = require('body-parser')
@@ -71,7 +71,33 @@ app.post('/createChannel', async (req, res) => {
     var response = await client.createChannel(request)
 
     if (response && response.status === 'SUCCESS') {
-      res.send({message: 'Channel created successfully'})
+      //res.send({message: 'Channel created successfully'})
+      hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
+      client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+      await client.initCredentialStores();
+      let channel = client.getChannel(channelName);
+      request = {
+        txId : 	client.newTransactionID(true) 
+      };
+      let genesis_block = await channel.getGenesisBlock(request);
+
+      let join_request = {
+        targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+        txId: client.newTransactionID(true),
+        block: genesis_block
+      };
+
+      let result = await channel.joinChannel(join_request);
+
+      if(result.response) {
+        if(result.response.status == 200) {
+          res.send({message: 'Created and joined channel'})
+        } else {
+          res.send({error: true, message: 'An error occured'})
+        }
+      } else {
+        res.send({error: true, message: 'An error occured'})
+      }
 		} else {
       res.send({error: true, message: 'Failed to create channel'})
 		}

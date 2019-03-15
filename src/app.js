@@ -1,7 +1,7 @@
 const shell = require('shelljs')
 const toPascalCase = require('to-pascal-case')
 const fs = require('fs')
-const yamlJs = require('yamljs');
+var yamlJs = require('json2yaml')
 const jsYaml = require('js-yaml');
 
 require('./apis')
