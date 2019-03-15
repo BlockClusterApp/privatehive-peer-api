@@ -10,7 +10,7 @@ const shareFileDir = process.env.SHARE_FILE_DIR || './crypto'
 const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
 const anchorPort = process.env.ANCHOR_PORT || 7051
 
-if(!fs.existsSync(shareFileDir + "initCompleted")) {
+if(!fs.existsSync(shareFileDir + "/initCompleted")) {
   const cryptoConfigYaml = `
     PeerOrgs:
       - Name: ${orgName}
