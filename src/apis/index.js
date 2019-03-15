@@ -182,9 +182,7 @@ app.post('/addOrgToChannel', async (req, res) => {
   shell.cd(shareFileDir)
   
   let networkMap = jsYaml.safeLoad(fs.readFileSync(shareFileDir + '/network-map.yaml', 'utf8'));
-  console.log(shareFileDir + '/network-map.yaml')
   let ordererURL = networkMap.orderers[networkMap.channels[channelName].orderers[0]].url
-  let ordererDomain = networkMap.channels[channelName].orderers[0]
 
   ordererURL = ordererURL.substring(7)
   
