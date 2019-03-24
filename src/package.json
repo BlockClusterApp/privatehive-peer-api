@@ -5,6 +5,7 @@
     "fabric-client": "^1.4.0",
     "js-yaml": "^3.12.2",
     "json2yaml": "^1.1.0",
+    "mongodb": "^3.2.2",
     "shelljs": "^0.8.3",
     "sleep-async": "^1.0.5",
     "to-pascal-case": "^1.0.0"
