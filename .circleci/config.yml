@@ -85,6 +85,8 @@ workflows:
       - check_approval:
           <<: *deploy_tag_filters
           type: approval
+          requires:
+            - docker_push
 
       - notify_update:
           <<: *deploy_tag_filters
