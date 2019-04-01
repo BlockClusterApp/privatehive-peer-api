@@ -14,11 +14,11 @@ references:
   restore_repo: &restore_repo
     restore_cache:
       keys:
-        - repo-dynamo-{{ .Branch }}-{{ .Revision }}
+        - repo-ph-peer-{{ .Branch }}-{{ .Revision }}
 
   save_repo: &save_repo
     save_cache:
-      key: repo-dynamo-{{ .Branch }}-{{ .Revision }}
+      key: repo-ph-peer-{{ .Branch }}-{{ .Revision }}
       paths:
         - .
 
