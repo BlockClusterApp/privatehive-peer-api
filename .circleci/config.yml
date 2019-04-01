@@ -1,0 +1,93 @@
+version: 2
+
+references:
+  container_config: &container_config
+    docker:
+      - image: circleci/node:8.11
+    working_directory: ~/repo
+
+  aws_container: &aws_container
+    docker:
+      - image: blockcluster/circleci-kubectl-base
+    working_directory: ~/repo
+
+  restore_repo: &restore_repo
+    restore_cache:
+      keys:
+        - repo-dynamo-{{ .Branch }}-{{ .Revision }}
+
+  save_repo: &save_repo
+    save_cache:
+      key: repo-dynamo-{{ .Branch }}-{{ .Revision }}
+      paths:
+        - .
+
+  deploy_tag_filters: &deploy_tag_filters
+    filters:
+      branches:
+        only:
+          - master
+          - staging
+          - dev
+
+jobs:
+  checkout_code:
+    <<: *container_config
+    steps:
+      - *restore_repo
+      - checkout
+      - *save_repo
+
+  docker_push:
+    <<: *aws_container
+    steps:
+      - *restore_repo
+      - run:
+          name: 'Build start notification'
+          command: ./.circleci/build-start-notification.sh
+      - setup_remote_docker:
+          version: 17.11.0-ce
+      - run:
+          name: 'Docker build'
+          command: ./.circleci/docker-build.sh
+      - run:
+          name: 'Docker push'
+          command: ./.circleci/docker-push.sh
+
+  notify_update:
+    <<: *container_config
+    steps:
+      - *restore_repo
+      - run:
+          name: 'Network Update'
+          command: ./.circleci/build-end-notification.sh
+
+  check_approval:
+    <<: *container_config
+    steps:
+      - run:
+          name: 'Echo'
+          command: echo "ok"
+
+workflows:
+  version: 2
+  build-and-push:
+    jobs:
+      - checkout_code:
+          <<: *deploy_tag_filters
+
+      - docker_push:
+          <<: *deploy_tag_filters
+          requires:
+            - checkout_code
+          context: aws-creds
+
+      - check_approval:
+          <<: *deploy_tag_filters
+          type: approval
+
+      - notify_update:
+          <<: *deploy_tag_filters
+          requires:
+            - check_approval
+          context: aws-creds
