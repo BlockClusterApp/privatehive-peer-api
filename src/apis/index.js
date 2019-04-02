@@ -269,11 +269,16 @@ app.post('/chaincodes/install', async (req, res) => {
   let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
 
   shell.cd(shareFileDir)
-  
+
   hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
   let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
   await client.initCredentialStores();
   await client.setUserContext({username: "admin", password: "adminpw"});
+
+  if(langauge === 'golang') {
+    shell.exec(`mkdir -p /opt/gopath/src${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`)
+    shell.exec(`ln -s ${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge} /opt/gopath/src${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`)
+  }
 
   let request = {
     targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
