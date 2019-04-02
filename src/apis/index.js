@@ -232,8 +232,25 @@ app.post('/chaincodes/add', async (req, res) => {
     let filepath = path.join(req.file.destination, req.file.filename);
     let unzipper = new Unzipper(filepath);
 
+    let moveFiles = (dir1, dir2) => {
+      return new Promise((resolve, reject) => {
+        mv(dir1, dir2, (err) => {
+          if(err) {
+            reject()
+          } else {
+            resolve()
+          }
+        })
+      })
+    }
+
     shell.mkdir('-p', `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
     unzipper.extract({ path: `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/` });
+
+
+    let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
+    await moveFiles(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/`, `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+    shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
 
     res.send({message: 'Chaincode added successfully'})
   } else {
