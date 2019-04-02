@@ -2,16 +2,22 @@ const app = require('express')()
 const fs = require('fs')
 const toPascalCase = require('to-pascal-case')
 const shell = require('shelljs')
-var yamlJs = require('json2yaml')
+const yamlJs = require('json2yaml')
 const jsYaml = require('js-yaml');
-let hfc = require('fabric-client');
-let bodyParser = require('body-parser')
+const hfc = require('fabric-client');
+const bodyParser = require('body-parser')
 const sleep = require('sleep-async')().Promise;
+const Unzipper = require("decompress-zip");
+const multer   = require("multer");
+const path     = require("path");
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
 
 app.use(bodyParser.json())
+app.use(multer({dest:`${shareFileDir}/uploads/`}).single('chaincode_zip'));
+
+shell.mkdir('-p', `${shareFileDir}/uploads/`)
 
 app.get('/channelConfigCerts', (req, res) => {
   let result = {}
@@ -216,6 +222,83 @@ app.post('/addOrgToChannel', async (req, res) => {
   console.log("Success in running commands")
 
   res.send({message: 'Added new org to the channel'})
+})
+
+app.post('/chaincodes/add', async (req, res) => {
+  let chaincodeName = req.body.chaincodeName.toLowerCase();
+  let chaincodeLanguage = req.body.chaincodeLanguage;
+
+  if(req.file) {
+    let filepath = path.join(req.file.destination, req.file.filename);
+    let unzipper = new Unzipper(filepath);
+
+    shell.mkdir('-p', `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+    unzipper.extract({ path: `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/` });
+
+    res.send({message: 'Chaincode added successfully'})
+  } else {
+    res.send({error: true, message: 'Chaincode missing'})
+  }
+})
+
+app.get('/chaincodes/list', async (req, res) => {
+  let chaincodes = []
+  
+  fs.readdirSync(`${shareFileDir}/src/github.com/`).forEach((name) => {
+    let version = fs.readdirSync(`${shareFileDir}/src/github.com/${name}/`)[0];
+    chaincodes.push({
+      name,
+      version,
+      language: fs.readdirSync(`${shareFileDir}/src/github.com/${name}/${version}/`)[0]
+    })
+  })
+
+  res.send({
+    message: chaincodes
+  })
+})
+
+app.get('/chaincodes/install', async (req, res) => {
+  let chaincodeName = req.body.chaincodeName.toLowerCase()
+  let language = req.body.chaincodeLanguage
+  let version = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/`)[0]
+  let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
+
+  hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
+  let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+  await client.initCredentialStores();
+  await client.setUserContext({username: "admin", password: "adminpw"});
+
+  let request = {
+    targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+    chaincodePath: `${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`,
+    chaincodeId: chaincodeName,
+    chaincodeVersion: version,
+    chaincodeType: langauge
+  };
+
+  let results = await client.installChaincode(request);
+  let proposalResponses = results[0];
+  let proposal = results[1];
+  
+  let all_good = true;
+  for (let i in proposalResponses) {
+    let one_good = false;
+    if (proposalResponses && proposalResponses[i].response &&
+      proposalResponses[i].response.status === 200) {
+      one_good = true;
+    }
+    all_good = all_good & one_good;
+  }
+  if (!all_good) {
+    error_message = 'Failed to send install Proposal or receive valid response. Response null or status is not 200'
+  }
+
+  if (!error_message) {
+		res.send({message: 'Chaincode installed successfully'})
+	} else {
+    res.send({error: true, message: `Failed to install chaincode: ${error_message}`})
+	}
 })
 
 app.listen(3000, () => console.log('API Server Running'))
