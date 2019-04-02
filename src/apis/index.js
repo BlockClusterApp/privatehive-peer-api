@@ -11,8 +11,6 @@ const Unzipper = require("decompress-zip");
 const multer   = require("multer");
 const path     = require("path");
 const mv = require('mv');
-const unzip = require('unzip')
-const fstream = require('fstream')
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
@@ -250,17 +248,12 @@ app.post('/chaincodes/add', async (req, res) => {
 
     shell.mkdir('-p', `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
 
-    let readStream = fs.createReadStream(filepath);
-    let writeStream = fstream.Writer(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`);
-
-    readStream.pipe(unzip.Parse()).pipe(writeStream)
-
-    //unzipper.extract({ path:  `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`});
+    unzipper.extract({ path:  `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`});
 
 
-    //let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
-    //await moveFiles(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/`, `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-    //shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
+    let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
+    await moveFiles(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/`, `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+    shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
 
     res.send({message: 'Chaincode added successfully'})
   } else {
