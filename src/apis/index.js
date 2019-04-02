@@ -235,14 +235,17 @@ app.post('/chaincodes/add', async (req, res) => {
     shell.mkdir('-p', `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
     unzipper.extract({ path:  `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`});
 
-    let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
-    console.log(folderName)
-    shell.exec(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-    console.log(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-    console.log(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
-    shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
+    setTimeout(() => {
+      let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
+      shell.exec(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+      shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
 
-    res.send({message: 'Chaincode added successfully'})
+      console.log(folderName)
+      console.log(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+      console.log(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
+
+      res.send({message: 'Chaincode added successfully'})
+    }, 3000)
   } else {
     res.send({error: true, message: 'Chaincode missing'})
   }
