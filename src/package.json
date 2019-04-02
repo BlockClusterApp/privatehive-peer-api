@@ -11,6 +11,7 @@
     "mv": "^2.1.1",
     "shelljs": "^0.8.3",
     "sleep-async": "^1.0.5",
-    "to-pascal-case": "^1.0.0"
+    "to-pascal-case": "^1.0.0",
+    "unzip": "^0.1.11"
   }
 }
