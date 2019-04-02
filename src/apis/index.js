@@ -291,6 +291,7 @@ app.post('/chaincodes/install', async (req, res) => {
   let results = await client.installChaincode(request);
   let proposalResponses = results[0];
   let proposal = results[1];
+  let error_message = null;
   
   let all_good = true;
   for (let i in proposalResponses) {
