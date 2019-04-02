@@ -10,6 +10,7 @@ const sleep = require('sleep-async')().Promise;
 const Unzipper = require("decompress-zip");
 const multer   = require("multer");
 const path     = require("path");
+const mv = require('mv');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
