@@ -10,7 +10,6 @@ const sleep = require('sleep-async')().Promise;
 const Unzipper = require("decompress-zip");
 const multer   = require("multer");
 const path     = require("path");
-const mv = require('mv');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
@@ -233,26 +232,11 @@ app.post('/chaincodes/add', async (req, res) => {
     let filepath = path.join(req.file.destination, req.file.filename);
     let unzipper = new Unzipper(filepath);
 
-    let moveFiles = (dir1, dir2) => {
-      return new Promise((resolve, reject) => {
-        mv(dir1, dir2, (err) => {
-          if(err) {
-            console.log(err)
-            reject()
-          } else {
-            resolve()
-          }
-        })
-      })
-    }
-
     shell.mkdir('-p', `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-
     unzipper.extract({ path:  `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`});
 
-
     let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
-    await moveFiles(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/`, `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+    shell.exec(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
     shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
 
     res.send({message: 'Chaincode added successfully'})
