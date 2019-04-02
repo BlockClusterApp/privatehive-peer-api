@@ -264,7 +264,7 @@ app.get('/chaincodes/list', async (req, res) => {
 })
 
 app.post('/chaincodes/install', async (req, res) => {
-  let chaincodeName = req.body.chaincodeName.toLowerCase()
+  let chaincodeName = req.body.chaincodeName
   let version = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/`)[0]
   let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
 
@@ -310,6 +310,156 @@ app.post('/chaincodes/install', async (req, res) => {
 		res.send({message: 'Chaincode installed successfully'})
 	} else {
     res.send({error: true, message: `Failed to install chaincode: ${error_message}`})
+	}
+})
+
+app.post('/chaincodes/instantiate', async (req, res) => {
+  let chaincodeName = req.body.chaincodeName
+  let channelName = req.body.channelName
+  let functionName = req.body.functionName || null
+  let args = req.body.args
+  let endorsmentPolicy = req.body.endorsmentPolicy || {
+    identities: [
+      { role: { name: 'member', mspId: orgName }},
+    ],
+    policy: {
+      '1-of':[{ 'signed-by': 0 }]
+    }
+  }
+
+  shell.cd(shareFileDir)
+
+  hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
+  let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+  
+  var error_message = null;
+
+  try {
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+
+    let channel = client.getChannel(channelName);
+
+    let version = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/`)[0]
+    let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
+    let tx_id = client.newTransactionID(true);
+    let deployId = tx_id.getTransactionID();
+
+    let request = {
+      targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+      chaincodeId: chaincodeName,
+      chaincodeType: langauge,
+      chaincodeVersion: version,
+      txId: tx_id,
+      'endorsement-policy': endorsmentPolicy
+    }
+
+    if(functionName)
+      request.fcn = functionName;
+        
+    if(args)
+      request.args = args
+
+    let results = await channel.sendInstantiateProposal(request, 60000);
+
+    let proposalResponses = results[0];
+    let proposal = results[1];
+    let all_good = true;
+
+    for (var i in proposalResponses) {
+      let one_good = false;
+      if (proposalResponses && proposalResponses[i].response &&
+        proposalResponses[i].response.status === 200) {
+        one_good = true;
+      }
+      all_good = all_good & one_good;
+    }
+
+    if (all_good) {
+      let promises = [];
+      let event_hubs = channel.getChannelEventHubsForOrg();
+
+      event_hubs.forEach((eh) => {
+        let instantiateEventPromise = new Promise((resolve, reject) => {
+          console.log('instantiateEventPromise - setting up event');
+          let event_timeout = setTimeout(() => {
+            let message = 'REQUEST_TIMEOUT:' + eh.getPeerAddr();
+            console.log(message);
+            eh.disconnect();
+          }, 60000);
+          eh.registerTxEvent(deployId, (tx, code, block_num) => {
+            console.log('The chaincode instantiate transaction has been committed on peer %s',eh.getPeerAddr());
+            console.log('Transaction %s has status of %s in blocl %s', tx, code, block_num);
+            clearTimeout(event_timeout);
+
+            if (code !== 'VALID') {
+              let message = `The chaincode instantiate transaction was invalid, code: ${code}`
+              console.log(message);
+              reject(new Error(message));
+            } else {
+              let message = 'The chaincode instantiate transaction was valid.';
+              console.log(message);
+              resolve(message);
+            }
+          }, (err) => {
+            clearTimeout(event_timeout);
+            console.log(err);
+            reject(err);
+          },
+            {unregister: true, disconnect: true}
+          );
+          eh.connect();
+        });
+        promises.push(instantiateEventPromise);
+      });
+
+      let orderer_request = {
+        txId: tx_id,
+        proposalResponses: proposalResponses,
+        proposal: proposal
+      };
+
+      let sendPromise = channel.sendTransaction(orderer_request);
+      promises.push(sendPromise);
+      let results = await Promise.all(promises);
+
+      console.log(`------->>> R E S P O N S E : ${results}`);
+      let response = results.pop(); //  orderer results are last in the results
+      if (response.status === 'SUCCESS') {
+        console.log('Successfully sent transaction to the orderer.');
+      } else {
+        error_message = `Failed to order the transaction. Error code: ${response.status}` 
+        console.log(error_message);
+      }
+
+      for(let i in results) {
+        let event_hub_result = results[i];
+        let event_hub = event_hubs[i];
+        console.log('Event results for event hub :%s',event_hub.getPeerAddr());
+        if(typeof event_hub_result === 'string') {
+          console.log(event_hub_result);
+        } else {
+          if(!error_message) error_message = event_hub_result.toString();
+          console.log(event_hub_result.toString());
+        }
+      }
+    } else {
+      error_message = `Failed to send Proposal and receive all good ProposalResponse`
+      console.log(error_message);
+    }
+  } catch(e){
+    console.log('Failed to send instantiate due to error: ' + error.stack ? error.stack : error);
+		error_message = error.toString();
+  }
+
+  if (!error_message) {
+		let message = `Successfully instantiate chaincode in organization ${orgName} to the channel ${channelName}` 
+		console.log(message);
+    res.send({message})
+	} else {
+		let message = `Failed to instantiate. cause: ${error_message}`
+    console.log(message);
+    res.send({error: true, message})
 	}
 })
 
