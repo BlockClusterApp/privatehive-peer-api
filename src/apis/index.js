@@ -239,11 +239,6 @@ app.post('/chaincodes/add', async (req, res) => {
       let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
       shell.exec(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
       shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
-
-      console.log(folderName)
-      console.log(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-      console.log(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
-
       res.send({message: 'Chaincode added successfully'})
     }, 3000)
   } else {
@@ -268,7 +263,7 @@ app.get('/chaincodes/list', async (req, res) => {
   })
 })
 
-app.get('/chaincodes/install', async (req, res) => {
+app.post('/chaincodes/install', async (req, res) => {
   let chaincodeName = req.body.chaincodeName.toLowerCase()
   let version = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/`)[0]
   let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
