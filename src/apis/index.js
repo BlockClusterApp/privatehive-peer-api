@@ -268,6 +268,8 @@ app.post('/chaincodes/install', async (req, res) => {
   let version = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/`)[0]
   let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
 
+  shell.cd(shareFileDir)
+  
   hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
   let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
   await client.initCredentialStores();
