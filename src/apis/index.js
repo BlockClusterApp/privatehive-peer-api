@@ -12,6 +12,7 @@ const multer   = require("multer");
 const path     = require("path");
 const mv = require('mv');
 const unzip = require('unzip')
+const fstream = require('fstream')
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
