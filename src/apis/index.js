@@ -81,6 +81,7 @@ app.post('/createChannel', async (req, res) => {
     };
     
     var response = await client.createChannel(request)
+    console.log(response)
 
     if (response && response.status === 'SUCCESS') {
       //res.send({message: 'Channel created successfully'})
@@ -88,6 +89,7 @@ app.post('/createChannel', async (req, res) => {
       client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
       await client.initCredentialStores();
       let channel = client.getChannel(channelName);
+      console.log(channel.toString())
       request = {
         txId : 	client.newTransactionID(true) 
       };
@@ -99,7 +101,11 @@ app.post('/createChannel', async (req, res) => {
         block: genesis_block
       };
 
+      console.log("Trying to join channel")
+
       let result = await channel.joinChannel(join_request);
+
+      console.log("Unable to join channel")
 
       if(result.response) {
         if(result.response.status == 200) {
