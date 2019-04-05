@@ -101,11 +101,7 @@ app.post('/createChannel', async (req, res) => {
         block: genesis_block
       };
 
-      console.log("Trying to join channel")
-
       let result = await channel.joinChannel(join_request);
-
-      console.log("Unable to join channel")
 
       if(result.response) {
         if(result.response.status == 200) {
@@ -366,11 +362,15 @@ app.post('/chaincodes/instantiate', async (req, res) => {
     if(args)
       request.args = args
 
+    console.log(request)
+
     let results = await channel.sendInstantiateProposal(request, 60000);
 
     let proposalResponses = results[0];
     let proposal = results[1];
     let all_good = true;
+
+    console.log(proposalResponses)
 
     for (var i in proposalResponses) {
       let one_good = false;
