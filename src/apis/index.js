@@ -232,13 +232,19 @@ app.post('/chaincodes/add', async (req, res) => {
     let filepath = path.join(req.file.destination, req.file.filename);
     let unzipper = new Unzipper(filepath);
 
-    shell.mkdir('-p', `${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-    unzipper.extract({ path:  `${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/`});
+    shell.mkdir('-p', `${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+    unzipper.extract({ path:  `${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`});
 
     setTimeout(() => {
-      let folderName = chaincodeName
-      shell.exec(`mv ${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-      shell.exec(`rm -rf ${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
+
+      /*
+        For nodejs: create a directory with name of the chaincode and place code files in it. While uploading zip the folder
+        For go lang: zip the src directory in $GOPATH and upload it
+      */
+
+      let folderName = chaincodeName //chaincodeLanguage === 'node' ? chaincodeName : 'src'
+      shell.exec(`mv ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+      shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
       res.send({message: 'Chaincode added successfully'})
     }, 3000)
   } else {
@@ -249,12 +255,12 @@ app.post('/chaincodes/add', async (req, res) => {
 app.get('/chaincodes/list', async (req, res) => {
   let chaincodes = []
   
-  fs.readdirSync(`${shareFileDir}/src/`).forEach((name) => {
-    let version = fs.readdirSync(`${shareFileDir}/src/${name}/`)[0];
+  fs.readdirSync(`${shareFileDir}/chaincodes/`).forEach((name) => {
+    let version = fs.readdirSync(`${shareFileDir}/chaincodes/${name}/`)[0];
     chaincodes.push({
       name,
       version,
-      language: fs.readdirSync(`${shareFileDir}/src/${name}/${version}/`)[0]
+      language: fs.readdirSync(`${shareFileDir}/chaincodes/${name}/${version}/`)[0]
     })
   })
 
@@ -265,8 +271,8 @@ app.get('/chaincodes/list', async (req, res) => {
 
 app.post('/chaincodes/install', async (req, res) => {
   let chaincodeName = req.body.chaincodeName
-  let version = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/`)[0]
-  let langauge = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/${version}/`)[0]
+  let version = fs.readdirSync(`${shareFileDir}/chaincodes/${chaincodeName}/`)[0]
+  let langauge = fs.readdirSync(`${shareFileDir}/chaincodes/${chaincodeName}/${version}/`)[0]
 
   shell.cd(shareFileDir)
 
@@ -276,20 +282,23 @@ app.post('/chaincodes/install', async (req, res) => {
   await client.setUserContext({username: "admin", password: "adminpw"});
 
   if(langauge === 'golang') {
-    shell.exec(`mkdir -p /opt/gopath/src/github.com/chaincodes/${chaincodeName}`) ///${version}/${langauge}
-    shell.exec(`ln -s ${shareFileDir}/src/${chaincodeName}/${version}/${langauge}/* /opt/gopath/src/github.com/chaincodes/${chaincodeName}/`) ///${version}/${langauge}
+    shell.exec(`mkdir -p /opt/gopath/src/chaincodes/${chaincodeName}/${version}`)
+    shell.exec(`ln -s ${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}/* /opt/gopath/src/chaincodes/${chaincodeName}/${version}/`) 
   }
 
   let chaincodePath = null;
 
   if(langauge === 'golang') {
-    chaincodePath = `github.com/chaincodes/${chaincodeName}` //${version}/${langauge}
+    chaincodePath = `chaincodes/${chaincodeName}/${version}`
+    
     if(shell.exec(`cd /opt/gopath/src/${chaincodePath} && go get ./...`).code !== 0) {
       throw "Go get didn't work"
     }
-    //shell.exec(`go build ${chaincodePath}`)
+
+    await sleep.sleep(2000)
+    console.log(fs.readdirSync(`/opt/gopath/src/`))
   } else {
-    chaincodePath = `${shareFileDir}/src/${chaincodeName}/${version}/${langauge}`
+    chaincodePath = `${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}`
   }
 
   let request = {
@@ -299,6 +308,8 @@ app.post('/chaincodes/install', async (req, res) => {
     chaincodeVersion: version,
     chaincodeType: langauge
   };
+
+  console.log(request)
 
   let results = await client.installChaincode(request);
   let proposalResponses = results[0];
@@ -352,8 +363,8 @@ app.post('/chaincodes/instantiate', async (req, res) => {
 
     let channel = client.getChannel(channelName);
 
-    let version = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/`)[0]
-    let langauge = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/${version}/`)[0]
+    let version = fs.readdirSync(`${shareFileDir}/chaincodes/${chaincodeName}/`)[0]
+    let langauge = fs.readdirSync(`${shareFileDir}/chaincodes/${chaincodeName}/${version}/`)[0]
     let tx_id = client.newTransactionID(true);
     let deployId = tx_id.getTransactionID();
 
