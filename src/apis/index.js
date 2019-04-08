@@ -19,6 +19,15 @@ app.use(multer({dest:`${shareFileDir}/uploads/`}).single('chaincode_zip'));
 
 shell.mkdir('-p', `${shareFileDir}/uploads/`)
 
+async function executeCommand(cmd) {
+  if (shell.exec(cmd, {shell: '/bin/bash'}).code !== 0) {
+    console.log("Failed", cmd)
+    return Promise.reject();
+  } else {
+    return Promise.resolve();
+  }
+}
+
 app.get('/channelConfigCerts', (req, res) => {
   let result = {}
 
@@ -194,15 +203,6 @@ app.post('/addOrgToChannel', async (req, res) => {
   
   fs.writeFileSync(`${shareFileDir}/${newOrgName.toLowerCase()}.json`, newOrgConf.toString())
 
-  async function executeCommand(cmd) {
-    if (shell.exec(cmd, {shell: '/bin/bash'}).code !== 0) {
-      console.log("Failed", cmd)
-      return Promise.reject();
-    } else {
-      return Promise.resolve();
-    }
-  }
-
   await executeCommand(`screen -d -m configtxlator start`)
   await sleep.sleep(2000)
   await executeCommand(`peer channel fetch config config_block.pb -o ${ordererURL} -c ${channelName}`)
@@ -290,51 +290,48 @@ app.post('/chaincodes/install', async (req, res) => {
 
   if(langauge === 'golang') {
     chaincodePath = `chaincodes/${chaincodeName}/${version}`
-    
-    if(shell.exec(`cd /opt/gopath/src/${chaincodePath} && go get ./...`).code !== 0) {
-      throw "Go get didn't work"
-    }
-
+    await executeCommand(`cd /opt/gopath/src/${chaincodePath} && go get ./...`)
     await sleep.sleep(2000)
-    console.log(fs.readdirSync(`/opt/gopath/src/`))
-    
   } else {
     chaincodePath = `${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}`
   }
 
-  let request = {
-    targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
-    chaincodePath,
-    chaincodeId: chaincodeName,
-    chaincodeVersion: version,
-    chaincodeType: langauge
-  };
-
-  console.log(request)
-
-  let results = await client.installChaincode(request);
-  let proposalResponses = results[0];
-  let proposal = results[1];
-  let error_message = null;
+  if(langauge === 'golang') {
+    await executeCommand(`peer chaincode install -n ${chaincodeName} -p ${chaincodePath} -v ${version} -l golang`)
+    res.send({message: 'Chaincode installed successfully'})
+  } else {
+    let request = {
+      targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+      chaincodePath,
+      chaincodeId: chaincodeName,
+      chaincodeVersion: version,
+      chaincodeType: langauge
+    };
   
-  let all_good = true;
-  for (let i in proposalResponses) {
-    let one_good = false;
-    if (proposalResponses && proposalResponses[i].response &&
-      proposalResponses[i].response.status === 200) {
-      one_good = true;
+    let results = await client.installChaincode(request);
+    let proposalResponses = results[0];
+    let proposal = results[1];
+    let error_message = null;
+    
+    let all_good = true;
+    for (let i in proposalResponses) {
+      let one_good = false;
+      if (proposalResponses && proposalResponses[i].response &&
+        proposalResponses[i].response.status === 200) {
+        one_good = true;
+      }
+      all_good = all_good & one_good;
     }
-    all_good = all_good & one_good;
+    if (!all_good) {
+      error_message = 'Failed to send install Proposal or receive valid response. Response null or status is not 200'
+    }
+  
+    if (!error_message) {
+      res.send({message: 'Chaincode installed successfully'})
+    } else {
+      res.send({error: true, message: `Failed to install chaincode: ${error_message}`})
+    }
   }
-  if (!all_good) {
-    error_message = 'Failed to send install Proposal or receive valid response. Response null or status is not 200'
-  }
-
-  if (!error_message) {
-		res.send({message: 'Chaincode installed successfully'})
-	} else {
-    res.send({error: true, message: `Failed to install chaincode: ${error_message}`})
-	}
 })
 
 app.post('/chaincodes/instantiate', async (req, res) => {
@@ -467,7 +464,7 @@ app.post('/chaincodes/instantiate', async (req, res) => {
 	} else {
 		let message = `Failed to instantiate. cause: ${error_message}`
     res.send({error: true, message})
-	}
+  }
 })
 
 app.listen(3000, () => console.log('API Server Running'))
