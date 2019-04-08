@@ -290,8 +290,6 @@ app.post('/chaincodes/install', async (req, res) => {
 
   if(langauge === 'golang') {
     chaincodePath = `chaincodes/${chaincodeName}/${version}`
-    await executeCommand(`cd /opt/gopath/src/${chaincodePath} && go get ./...`)
-    await sleep.sleep(2000)
   } else {
     chaincodePath = `${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}`
   }
