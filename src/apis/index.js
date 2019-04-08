@@ -297,6 +297,7 @@ app.post('/chaincodes/install', async (req, res) => {
 
     await sleep.sleep(2000)
     console.log(fs.readdirSync(`/opt/gopath/src/`))
+    
   } else {
     chaincodePath = `${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}`
   }
