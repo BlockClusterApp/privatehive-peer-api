@@ -162,7 +162,7 @@ async function updateStatus() {
     }
   
     networkMap.peers[`peer0.peer.${orgName.toLowerCase()}.com`] =  {
-      "url": "grpc://localhost:7051"
+      "url": `grpc://localhost:7051`
     }
   
     networkMap.certificateAuthorities[`ca-${orgName.toLowerCase()}`] = {

@@ -239,6 +239,9 @@ app.post('/chaincodes/add', async (req, res) => {
 
     setTimeout(() => {
       let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
+      console.log(folderName)
+      console.log(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+      console.log(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
       shell.exec(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
       shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
       res.send({message: 'Chaincode added successfully'})
@@ -278,17 +281,31 @@ app.post('/chaincodes/install', async (req, res) => {
   await client.setUserContext({username: "admin", password: "adminpw"});
 
   if(langauge === 'golang') {
-    shell.exec(`mkdir -p /opt/gopath/src${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`)
-    shell.exec(`ln -s ${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge} /opt/gopath/src${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`)
+    shell.exec(`mkdir -p /opt/gopath/src/github.com/chaincodes/${chaincodeName}`) ///${version}/${langauge}
+    shell.exec(`ln -s ${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}/* /opt/gopath/src/github.com/chaincodes/${chaincodeName}/`) ///${version}/${langauge}
+  }
+
+  let chaincodePath = null;
+
+  if(langauge === 'golang') {
+    chaincodePath = `github.com/chaincodes/${chaincodeName}` //${version}/${langauge}
+    if(shell.exec(`cd /opt/gopath/src/${chaincodePath} && go get ./...`).code !== 0) {
+      throw "Go get didn't work"
+    }
+    //shell.exec(`go build ${chaincodePath}`)
+  } else {
+    chaincodePath = `${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`
   }
 
   let request = {
     targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
-    chaincodePath: `${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`,
+    chaincodePath,
     chaincodeId: chaincodeName,
     chaincodeVersion: version,
     chaincodeType: langauge
   };
+
+  console.log(request)
 
   let results = await client.installChaincode(request);
   let proposalResponses = results[0];
@@ -453,7 +470,7 @@ app.post('/chaincodes/instantiate', async (req, res) => {
       error_message = `Failed to send Proposal and receive all good ProposalResponse`
       console.log(error_message);
     }
-  } catch(e){
+  } catch(error){
     console.log('Failed to send instantiate due to error: ' + error.stack ? error.stack : error);
 		error_message = error.toString();
   }
