@@ -81,7 +81,6 @@ app.post('/createChannel', async (req, res) => {
     };
     
     var response = await client.createChannel(request)
-    console.log(response)
 
     if (response && response.status === 'SUCCESS') {
       //res.send({message: 'Channel created successfully'})
@@ -89,7 +88,6 @@ app.post('/createChannel', async (req, res) => {
       client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
       await client.initCredentialStores();
       let channel = client.getChannel(channelName);
-      console.log(channel.toString())
       request = {
         txId : 	client.newTransactionID(true) 
       };
@@ -234,16 +232,13 @@ app.post('/chaincodes/add', async (req, res) => {
     let filepath = path.join(req.file.destination, req.file.filename);
     let unzipper = new Unzipper(filepath);
 
-    shell.mkdir('-p', `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-    unzipper.extract({ path:  `${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`});
+    shell.mkdir('-p', `${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+    unzipper.extract({ path:  `${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/`});
 
     setTimeout(() => {
-      let folderName = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)[0]
-      console.log(folderName)
-      console.log(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-      console.log(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)
-      shell.exec(`mv ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-      shell.exec(`rm -rf ${shareFileDir}/src/github.com/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
+      let folderName = chaincodeName
+      shell.exec(`mv ${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+      shell.exec(`rm -rf ${shareFileDir}/src/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
       res.send({message: 'Chaincode added successfully'})
     }, 3000)
   } else {
@@ -254,12 +249,12 @@ app.post('/chaincodes/add', async (req, res) => {
 app.get('/chaincodes/list', async (req, res) => {
   let chaincodes = []
   
-  fs.readdirSync(`${shareFileDir}/src/github.com/`).forEach((name) => {
-    let version = fs.readdirSync(`${shareFileDir}/src/github.com/${name}/`)[0];
+  fs.readdirSync(`${shareFileDir}/src/`).forEach((name) => {
+    let version = fs.readdirSync(`${shareFileDir}/src/${name}/`)[0];
     chaincodes.push({
       name,
       version,
-      language: fs.readdirSync(`${shareFileDir}/src/github.com/${name}/${version}/`)[0]
+      language: fs.readdirSync(`${shareFileDir}/src/${name}/${version}/`)[0]
     })
   })
 
@@ -270,8 +265,8 @@ app.get('/chaincodes/list', async (req, res) => {
 
 app.post('/chaincodes/install', async (req, res) => {
   let chaincodeName = req.body.chaincodeName
-  let version = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/`)[0]
-  let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
+  let version = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/`)[0]
+  let langauge = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/${version}/`)[0]
 
   shell.cd(shareFileDir)
 
@@ -282,7 +277,7 @@ app.post('/chaincodes/install', async (req, res) => {
 
   if(langauge === 'golang') {
     shell.exec(`mkdir -p /opt/gopath/src/github.com/chaincodes/${chaincodeName}`) ///${version}/${langauge}
-    shell.exec(`ln -s ${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}/* /opt/gopath/src/github.com/chaincodes/${chaincodeName}/`) ///${version}/${langauge}
+    shell.exec(`ln -s ${shareFileDir}/src/${chaincodeName}/${version}/${langauge}/* /opt/gopath/src/github.com/chaincodes/${chaincodeName}/`) ///${version}/${langauge}
   }
 
   let chaincodePath = null;
@@ -294,7 +289,7 @@ app.post('/chaincodes/install', async (req, res) => {
     }
     //shell.exec(`go build ${chaincodePath}`)
   } else {
-    chaincodePath = `${shareFileDir}/src/github.com/${chaincodeName}/${version}/${langauge}`
+    chaincodePath = `${shareFileDir}/src/${chaincodeName}/${version}/${langauge}`
   }
 
   let request = {
@@ -304,8 +299,6 @@ app.post('/chaincodes/install', async (req, res) => {
     chaincodeVersion: version,
     chaincodeType: langauge
   };
-
-  console.log(request)
 
   let results = await client.installChaincode(request);
   let proposalResponses = results[0];
@@ -359,8 +352,8 @@ app.post('/chaincodes/instantiate', async (req, res) => {
 
     let channel = client.getChannel(channelName);
 
-    let version = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/`)[0]
-    let langauge = fs.readdirSync(`${shareFileDir}/src/github.com/${chaincodeName}/${version}/`)[0]
+    let version = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/`)[0]
+    let langauge = fs.readdirSync(`${shareFileDir}/src/${chaincodeName}/${version}/`)[0]
     let tx_id = client.newTransactionID(true);
     let deployId = tx_id.getTransactionID();
 
@@ -379,15 +372,11 @@ app.post('/chaincodes/instantiate', async (req, res) => {
     if(args)
       request.args = args
 
-    console.log(request)
-
     let results = await channel.sendInstantiateProposal(request, 60000);
 
     let proposalResponses = results[0];
     let proposal = results[1];
     let all_good = true;
-
-    console.log(proposalResponses)
 
     for (var i in proposalResponses) {
       let one_good = false;
@@ -404,24 +393,18 @@ app.post('/chaincodes/instantiate', async (req, res) => {
 
       event_hubs.forEach((eh) => {
         let instantiateEventPromise = new Promise((resolve, reject) => {
-          console.log('instantiateEventPromise - setting up event');
           let event_timeout = setTimeout(() => {
             let message = 'REQUEST_TIMEOUT:' + eh.getPeerAddr();
-            console.log(message);
             eh.disconnect();
           }, 60000);
           eh.registerTxEvent(deployId, (tx, code, block_num) => {
-            console.log('The chaincode instantiate transaction has been committed on peer %s',eh.getPeerAddr());
-            console.log('Transaction %s has status of %s in blocl %s', tx, code, block_num);
             clearTimeout(event_timeout);
 
             if (code !== 'VALID') {
               let message = `The chaincode instantiate transaction was invalid, code: ${code}`
-              console.log(message);
               reject(new Error(message));
             } else {
               let message = 'The chaincode instantiate transaction was valid.';
-              console.log(message);
               resolve(message);
             }
           }, (err) => {
@@ -446,42 +429,31 @@ app.post('/chaincodes/instantiate', async (req, res) => {
       promises.push(sendPromise);
       let results = await Promise.all(promises);
 
-      console.log(`------->>> R E S P O N S E : ${results}`);
       let response = results.pop(); //  orderer results are last in the results
-      if (response.status === 'SUCCESS') {
-        console.log('Successfully sent transaction to the orderer.');
-      } else {
+      if (response.status !== 'SUCCESS') {
         error_message = `Failed to order the transaction. Error code: ${response.status}` 
-        console.log(error_message);
       }
 
       for(let i in results) {
         let event_hub_result = results[i];
         let event_hub = event_hubs[i];
-        console.log('Event results for event hub :%s',event_hub.getPeerAddr());
         if(typeof event_hub_result === 'string') {
-          console.log(event_hub_result);
         } else {
           if(!error_message) error_message = event_hub_result.toString();
-          console.log(event_hub_result.toString());
         }
       }
     } else {
       error_message = `Failed to send Proposal and receive all good ProposalResponse`
-      console.log(error_message);
     }
   } catch(error){
-    console.log('Failed to send instantiate due to error: ' + error.stack ? error.stack : error);
 		error_message = error.toString();
   }
 
   if (!error_message) {
 		let message = `Successfully instantiate chaincode in organization ${orgName} to the channel ${channelName}` 
-		console.log(message);
     res.send({message})
 	} else {
 		let message = `Failed to instantiate. cause: ${error_message}`
-    console.log(message);
     res.send({error: true, message})
 	}
 })
