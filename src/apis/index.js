@@ -92,6 +92,9 @@ app.post('/createChannel', async (req, res) => {
     var response = await client.createChannel(request)
 
     if (response && response.status === 'SUCCESS') {
+
+      await sleep.sleep(5000)
+
       //res.send({message: 'Channel created successfully'})
       hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
       client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
