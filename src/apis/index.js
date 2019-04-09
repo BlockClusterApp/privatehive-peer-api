@@ -137,6 +137,8 @@ app.post('/channel/join', async (req, res) => {
   let ordererURL = req.body.ordererURL
   let ordererOrgName = req.body.ordererOrgName.toLowerCase()
 
+  shell.cd(shareFileDir)
+
   let networkMap = jsYaml.safeLoad(fs.readFileSync(`${shareFileDir}/network-map.yaml`, 'utf8'));
 
   if(!networkMap.channels[channelName]) {
@@ -199,34 +201,38 @@ app.post('/channel/addOrg', async (req, res) => {
   let newOrgName = toPascalCase(req.body.newOrgName) 
   let newOrgConf = req.body.newOrgConf
 
-  shell.cd(shareFileDir)
+  try {
+    shell.cd(shareFileDir)
   
-  let networkMap = jsYaml.safeLoad(fs.readFileSync(shareFileDir + '/network-map.yaml', 'utf8'));
-  let ordererURL = networkMap.orderers[networkMap.channels[channelName].orderers[0]].url
+    let networkMap = jsYaml.safeLoad(fs.readFileSync(shareFileDir + '/network-map.yaml', 'utf8'));
+    let ordererURL = networkMap.orderers[networkMap.channels[channelName].orderers[0]].url
 
-  ordererURL = ordererURL.substring(7)
-  
-  fs.writeFileSync(`${shareFileDir}/${newOrgName.toLowerCase()}.json`, newOrgConf.toString())
+    ordererURL = ordererURL.substring(7)
+    
+    fs.writeFileSync(`${shareFileDir}/${newOrgName.toLowerCase()}.json`, newOrgConf.toString())
 
-  await executeCommand(`screen -d -m configtxlator start`)
-  await sleep.sleep(2000)
-  await executeCommand(`peer channel fetch config config_block.pb -o ${ordererURL} -c ${channelName}`)
-  await executeCommand('curl -X POST --data-binary @config_block.pb "$CONFIGTXLATOR_URL/protolator/decode/common.Block" | jq . > config_block.json')
-  await executeCommand('jq .data.data[0].payload.data.config config_block.json > config.json')
-  await executeCommand(`jq -s '.[0] * {"channel_group":{"groups":{"Application":{"groups":{"${newOrgName}":.[1]}}}}}' config.json ./${newOrgName.toLowerCase()}.json >& updated_config.json`)
-  await executeCommand(`curl -X POST --data-binary @config.json "$CONFIGTXLATOR_URL/protolator/encode/common.Config" > config.pb`)
-  await executeCommand(`curl -X POST --data-binary @updated_config.json "$CONFIGTXLATOR_URL/protolator/encode/common.Config" > updated_config.pb`)
-  await executeCommand(`curl -X POST -F channel=${channelName} -F "original=@config.pb" -F "updated=@updated_config.pb" "$CONFIGTXLATOR_URL/configtxlator/compute/update-from-configs" > config_update.pb`)
-  await executeCommand(`curl -X POST --data-binary @config_update.pb "$CONFIGTXLATOR_URL/protolator/decode/common.ConfigUpdate" | jq . > config_update.json`)
-  await executeCommand(`echo '{"payload":{"header":{"channel_header":{"channel_id":"${channelName}","type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json`)
-  await executeCommand(`curl -X POST --data-binary @config_update_in_envelope.json "$CONFIGTXLATOR_URL/protolator/encode/common.Envelope" > config_update_in_envelope.pb`)
-  await executeCommand(`peer channel signconfigtx -f config_update_in_envelope.pb`)
-  await executeCommand(`peer channel update -f config_update_in_envelope.pb -c ${channelName} -o ${ordererURL}`)
-  await executeCommand(`screen -ls | grep Detached | cut -d. -f1 | awk '{print $1}' | xargs kill`)
+    await executeCommand(`screen -d -m configtxlator start`)
+    await sleep.sleep(2000)
+    await executeCommand(`peer channel fetch config config_block.pb -o ${ordererURL} -c ${channelName}`)
+    await executeCommand('curl -X POST --data-binary @config_block.pb "$CONFIGTXLATOR_URL/protolator/decode/common.Block" | jq . > config_block.json')
+    await executeCommand('jq .data.data[0].payload.data.config config_block.json > config.json')
+    await executeCommand(`jq -s '.[0] * {"channel_group":{"groups":{"Application":{"groups":{"${newOrgName}":.[1]}}}}}' config.json ./${newOrgName.toLowerCase()}.json >& updated_config.json`)
+    await executeCommand(`curl -X POST --data-binary @config.json "$CONFIGTXLATOR_URL/protolator/encode/common.Config" > config.pb`)
+    await executeCommand(`curl -X POST --data-binary @updated_config.json "$CONFIGTXLATOR_URL/protolator/encode/common.Config" > updated_config.pb`)
+    await executeCommand(`curl -X POST -F channel=${channelName} -F "original=@config.pb" -F "updated=@updated_config.pb" "$CONFIGTXLATOR_URL/configtxlator/compute/update-from-configs" > config_update.pb`)
+    await executeCommand(`curl -X POST --data-binary @config_update.pb "$CONFIGTXLATOR_URL/protolator/decode/common.ConfigUpdate" | jq . > config_update.json`)
+    await executeCommand(`echo '{"payload":{"header":{"channel_header":{"channel_id":"${channelName}","type":2}},"data":{"config_update":'$(cat config_update.json)'}}}' | jq . > config_update_in_envelope.json`)
+    await executeCommand(`curl -X POST --data-binary @config_update_in_envelope.json "$CONFIGTXLATOR_URL/protolator/encode/common.Envelope" > config_update_in_envelope.pb`)
+    await executeCommand(`peer channel signconfigtx -f config_update_in_envelope.pb`)
+    await executeCommand(`peer channel update -f config_update_in_envelope.pb -c ${channelName} -o ${ordererURL}`)
+    await executeCommand(`screen -ls | grep Detached | cut -d. -f1 | awk '{print $1}' | xargs kill`)
 
-  console.log("Success in running commands")
+    console.log("Success in running commands")
 
-  res.send({message: 'Added new org to the channel'})
+    res.send({message: 'Added new org to the channel'})
+  } catch(e) {
+    res.send({error: true, message: e.toString()})
+  }
 })
 
 app.get('/channels/list', async (req, res) => {
@@ -255,21 +261,30 @@ app.post('/chaincodes/add', async (req, res) => {
   let chaincodeName = req.body.chaincodeName.toLowerCase();
   let chaincodeLanguage = req.body.chaincodeLanguage;
 
-  if(req.file) {
-    let filepath = path.join(req.file.destination, req.file.filename);
-    let unzipper = new Unzipper(filepath);
-
-    shell.mkdir('-p', `${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-    unzipper.extract({ path:  `${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`});
-
-    setTimeout(() => {
-      let folderName = chaincodeName //chaincodeLanguage === 'node' ? chaincodeName : 'src'
-      shell.exec(`mv ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`)
-      shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
-      res.send({message: 'Chaincode added successfully'})
-    }, 3000)
+  if (!fs.existsSync(`${shareFileDir}/chaincodes/${chaincodeName}`)) {
+    if(req.file) {
+      let filepath = path.join(req.file.destination, req.file.filename);
+      let unzipper = new Unzipper(filepath);
+  
+      shell.mkdir('-p', `${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+      unzipper.extract({ path:  `${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`});
+  
+      setTimeout(() => {
+        let folderName = chaincodeName
+        if (fs.existsSync(`${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)) {
+          shell.exec(`mv ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`)
+          shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
+          res.send({message: 'Chaincode added successfully'})
+        } else {
+          shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}`)
+          res.send({error: true, message: 'Chaincode directory name wrong'})
+        }
+      }, 3000)
+    } else {
+      res.send({error: true, message: 'Chaincode missing'})
+    }    
   } else {
-    res.send({error: true, message: 'Chaincode missing'})
+    res.send({error: true, message: 'Chaincode already exists'})
   }
 })
 
@@ -372,7 +387,7 @@ app.post('/chaincodes/instantiate', async (req, res) => {
   hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
   let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
   
-  var error_message = null;
+  let error_message = null;
 
   try {
     await client.initCredentialStores();
@@ -601,6 +616,47 @@ app.post('/chaincodes/invoke', async (req, res) => {
 	}
 })
 
+app.post('/chaincodes/query', async (req, res) => {
+  shell.cd(shareFileDir)
+
+  let channelName = req.body.channelName
+  let chaincodeName = req.body.chaincodeName
+  let args = req.body.args
+  let fcn = req.body.fcn
+
+  try { 
+    hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+
+    let channel = client.getChannel(channelName);
+
+    if(!channel) {
+      res.send({error: true, message: 'Channel not found'})
+      return
+    }
+    
+    let request = {
+			targets : [`peer0.peer.${orgName.toLowerCase()}.com`], 
+			chaincodeId: chaincodeName,
+			fcn: fcn,
+			args: args
+    };
+    
+    let response_payloads = await channel.queryByChaincode(request);
+
+    if (response_payloads) {
+      res.send({message: response_payloads[0].toString('utf8')})
+		} else {
+      res.send({error: true, message: 'Response was null'})
+			return;
+		}
+  } catch (error) {
+    res.send({error: true, message: error.toString()})
+  }
+})
+
 app.post('/notifications/add', async (req, res) => {
   
   shell.cd(shareFileDir)
@@ -622,7 +678,7 @@ app.post('/notifications/add', async (req, res) => {
       console.log('Successfully received the chaincode event on block number '+ block_num);
       console.log(atob(event.payload.toString('base64')));
     },
-    (error)=>{
+    (error) => {
       console.log('Failed to receive the chaincode event ::'+error);
     }
   );
