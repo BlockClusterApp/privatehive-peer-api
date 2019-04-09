@@ -15,6 +15,7 @@ const shareFileDir = process.env.SHARE_FILE_DIR || './crypto'
 const orgName = toPascalCase(process.env.ORG_NAME)
 
 app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(multer({dest:`${shareFileDir}/uploads/`}).single('chaincode_zip'));
 
 shell.mkdir('-p', `${shareFileDir}/uploads/`)
