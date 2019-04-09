@@ -43,7 +43,7 @@ app.get('/orgDetails', (req, res) => {
   res.send({message: details})
 })
 
-app.post('/createChannel', async (req, res) => {
+app.post('/channel/create', async (req, res) => {
   let channelName = req.body.name.toLowerCase()
   let ordererURL = req.body.ordererURL
   let ordererOrgName = req.body.ordererOrgName.toLowerCase()
@@ -131,7 +131,7 @@ app.post('/createChannel', async (req, res) => {
   }
 })
 
-app.post('/joinChannel', async (req, res) => {
+app.post('/channel/join', async (req, res) => {
   let channelName = req.body.name.toLowerCase()
   let ordererURL = req.body.ordererURL
   let ordererOrgName = req.body.ordererOrgName.toLowerCase()
@@ -193,7 +193,7 @@ app.post('/joinChannel', async (req, res) => {
   }
 })
 
-app.post('/addOrgToChannel', async (req, res) => {
+app.post('/channel/addOrg', async (req, res) => {
   let channelName = req.body.name.toLowerCase()
   let newOrgName = toPascalCase(req.body.newOrgName) 
   let newOrgConf = req.body.newOrgConf
@@ -228,6 +228,28 @@ app.post('/addOrgToChannel', async (req, res) => {
   res.send({message: 'Added new org to the channel'})
 })
 
+app.get('/channels/list', async (req, res) => {
+  let channels = []
+
+  shell.cd(shareFileDir)
+  let networkMap = jsYaml.safeLoad(fs.readFileSync('./network-map.yaml', 'utf8'));
+
+  if(networkMap.channels) {
+    for(let channelName in networkMap.channels) {
+      let ordererOrgName = networkMap.channels[channelName].orderers[0].substring(8)
+      ordererOrgName = toPascalCase(ordererOrgName.substring(0, ordererOrgName.length - 4)) 
+      channels.push({
+        name: channelName,
+        ordererOrgName
+      })
+    }
+  }
+
+  res.send({
+    message: channels
+  })
+})
+
 app.post('/chaincodes/add', async (req, res) => {
   let chaincodeName = req.body.chaincodeName.toLowerCase();
   let chaincodeLanguage = req.body.chaincodeLanguage;
@@ -240,12 +262,6 @@ app.post('/chaincodes/add', async (req, res) => {
     unzipper.extract({ path:  `${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`});
 
     setTimeout(() => {
-
-      /*
-        For nodejs: create a directory with name of the chaincode and place code files in it. While uploading zip the folder
-        For go lang: zip the src directory in $GOPATH and upload it
-      */
-
       let folderName = chaincodeName //chaincodeLanguage === 'node' ? chaincodeName : 'src'
       shell.exec(`mv ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/`)
       shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}/1.0/${chaincodeLanguage}/${folderName}`)  
