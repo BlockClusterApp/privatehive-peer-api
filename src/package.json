@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "atob": "^2.1.2",
     "body-parser": "^1.18.3",
     "decompress-zip": "^0.2.2",
     "express": "^4.16.4",

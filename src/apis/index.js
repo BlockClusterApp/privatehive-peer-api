@@ -10,6 +10,7 @@ const sleep = require('sleep-async')().Promise;
 const Unzipper = require("decompress-zip");
 const multer   = require("multer");
 const path     = require("path");
+const atob = require('atob');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
@@ -338,7 +339,7 @@ app.post('/chaincodes/install', async (req, res) => {
 app.post('/chaincodes/instantiate', async (req, res) => {
   let chaincodeName = req.body.chaincodeName
   let channelName = req.body.channelName
-  let functionName = req.body.functionName || null
+  let fcn = req.body.fcn || null
   let args = req.body.args
   let endorsmentPolicy = req.body.endorsmentPolicy || {
     identities: [
@@ -376,8 +377,8 @@ app.post('/chaincodes/instantiate', async (req, res) => {
       'endorsement-policy': endorsmentPolicy
     }
 
-    if(functionName)
-      request.fcn = functionName;
+    if(fcn)
+      request.fcn = fcn;
         
     if(args)
       request.args = args
@@ -466,6 +467,150 @@ app.post('/chaincodes/instantiate', async (req, res) => {
 		let message = `Failed to instantiate. cause: ${error_message}`
     res.send({error: true, message})
   }
+})
+
+app.post('/chaincodes/invoke', async (req, res) => {
+  let error_message = null;
+  let tx_id_string = null;
+  
+  shell.cd(shareFileDir)
+
+  let channelName = req.body.channelName
+  let chaincodeName = req.body.chaincodeName
+  let fcn = req.body.fcn
+  let args = req.body.args
+
+  try {
+  
+    hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+  
+    let channel = client.getChannel(channelName);
+  
+    var tx_id = client.newTransactionID();
+    tx_id_string = tx_id.getTransactionID();
+  
+    var request = {
+      targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+      chaincodeId: chaincodeName,
+      fcn: fcn,
+      args: args,
+      chainId: channelName,
+      txId: tx_id
+    };
+  
+    let results = await channel.sendTransactionProposal(request);
+  
+    var proposalResponses = results[0];
+    var proposal = results[1];
+    var all_good = true;
+
+    var all_good = true;
+		for (var i in proposalResponses) {
+			let one_good = false;
+			if (proposalResponses && proposalResponses[i].response &&
+				proposalResponses[i].response.status === 200) {
+				one_good = true;
+			}
+			all_good = all_good & one_good;
+    }
+    
+    if (all_good) {
+			var promises = [];
+			let event_hubs = channel.getChannelEventHubsForOrg();
+			event_hubs.forEach((eh) => {
+				let invokeEventPromise = new Promise((resolve, reject) => {
+					let event_timeout = setTimeout(() => {
+						let message = 'REQUEST_TIMEOUT:' + eh.getPeerAddr();
+						console.log(message);
+						eh.disconnect();
+					}, 3000);
+					eh.registerTxEvent(tx_id_string, (tx, code, block_num) => {
+						clearTimeout(event_timeout);
+						if (code !== 'VALID') {
+							let message = `The invoke chaincode transaction was invalid, code: ${code}` 
+							reject(new Error(message));
+						} else {
+							let message = 'The invoke chaincode transaction was valid.';
+							resolve(message);
+						}
+					}, (err) => {
+						clearTimeout(event_timeout);
+						reject(err);
+					},
+            {unregister: true, disconnect: true}
+					);
+					eh.connect();
+				});
+				promises.push(invokeEventPromise);
+			});
+
+			var orderer_request = {
+				txId: tx_id,
+				proposalResponses: proposalResponses,
+				proposal: proposal
+			};
+			var sendPromise = channel.sendTransaction(orderer_request);
+			promises.push(sendPromise);
+			let results = await Promise.all(promises);
+			let response = results.pop(); //  orderer results are last in the results
+			if (response.status !== 'SUCCESS') {
+				error_message = `Failed to order the transaction. Error code: ${response.status}`
+			}
+
+			// now see what each of the event hubs reported
+			for(let i in results) {
+				let event_hub_result = results[i];
+				let event_hub = event_hubs[i];
+				if(typeof event_hub_result !== 'string') {
+          if(!error_message) error_message = event_hub_result.toString();
+        }
+			}
+		} else {
+			error_message = 'Failed to send Proposal and receive all good ProposalResponse';
+		}
+  } catch(error) {
+    error_message = error.toString();
+  }
+
+  if (!error_message) {
+		let message = `Successfully invoked the chaincode ${chaincodeName} to the channel ${channelName} for transaction ID: ${tx_id_string}`;
+    res.send({message})
+	} else {
+		let message = `Failed to invoke chaincode. cause: ${error_message}`
+    res.send({error: true, message})
+	}
+})
+
+app.post('/notifications/add', async (req, res) => {
+  
+  shell.cd(shareFileDir)
+
+  let chaincodeName = req.body.chaincodeName
+  let channelName = req.body.channelName
+  let chaincodeEventName = req.body.chaincodeEventName
+
+  hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+  let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+  await client.initCredentialStores();
+
+  let channel = client.getChannel(channelName);
+  let eventHub = channel.getChannelEventHubsForOrg(orgName)[0];
+  eventHub.connect(true);
+  eventHub.registerChaincodeEvent(chaincodeName, chaincodeEventName,
+    (event, block_num, txnid, status) => {
+      console.log('Successfully got a chaincode event with transid:'+ txnid + ' with status:'+ status);
+      console.log('Successfully received the chaincode event on block number '+ block_num);
+      console.log(atob(event.payload.toString('base64')));
+    },
+    (error)=>{
+      console.log('Failed to receive the chaincode event ::'+error);
+    }
+  );
+
+  res.send({message: 'Registered'})
 })
 
 app.listen(3000, () => console.log('API Server Running'))
