@@ -11,6 +11,9 @@ const Unzipper = require("decompress-zip");
 const multer   = require("multer");
 const path     = require("path");
 const atob = require('atob');
+const low = require('lowdb')
+const FileSync = require('lowdb/adapters/FileSync')
+const request = require('request');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
@@ -20,6 +23,10 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(multer({dest:`${shareFileDir}/uploads/`}).single('chaincode_zip'));
 
 shell.mkdir('-p', `${shareFileDir}/uploads/`)
+
+const notifications_adapter = new FileSync(`${shareFileDir}/notifications.json`)
+const notifications_db = low(notifications_adapter)
+notifications_db.defaults({ notifications: [] }).write()
 
 async function executeCommand(cmd) {
   if (shell.exec(cmd, {shell: '/bin/bash'}).code !== 0) {
@@ -657,33 +664,129 @@ app.post('/chaincodes/query', async (req, res) => {
   }
 })
 
-app.post('/notifications/add', async (req, res) => {
-  
+let notifyClient = async (url, json) => {
+  return new Promise((resolve) => {
+    request({
+      url,
+      method: "POST",
+      json
+    }, (error, result, body) => {
+      resolve()
+    })
+  })
+}
+
+const registeredHandlers = {}
+
+let registerNotification = async ({ chaincodeName, channelName, chaincodeEventName, startBlock }) => {
   shell.cd(shareFileDir)
-
-  let chaincodeName = req.body.chaincodeName
-  let channelName = req.body.channelName
-  let chaincodeEventName = req.body.chaincodeEventName
-
   hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
   let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
   await client.initCredentialStores();
 
   let channel = client.getChannel(channelName);
   let eventHub = channel.getChannelEventHubsForOrg(orgName)[0];
-  eventHub.connect(true);
-  eventHub.registerChaincodeEvent(chaincodeName, chaincodeEventName,
-    (event, block_num, txnid, status) => {
-      console.log('Successfully got a chaincode event with transid:'+ txnid + ' with status:'+ status);
-      console.log('Successfully received the chaincode event on block number '+ block_num);
-      console.log(atob(event.payload.toString('base64')));
+  let handler = eventHub.registerChaincodeEvent(chaincodeName, chaincodeEventName,
+    async (event, block_num, txnid, status) => {
+      let result = notifications_db.get('notifications').find({ chaincodeName, channelName, chaincodeEventName }).value()
+
+      await notifyClient(result.notificationURL, {
+        txnId: txnid,
+        blockNumber: block_num,
+        payload: atob(event.payload.toString('base64'))
+      })
+
+      notifications_db.get('notifications').find({ chaincodeName, channelName, chaincodeEventName }).assign({ startBlock: parseInt(block_num)}).write()
     },
-    (error) => {
-      console.log('Failed to receive the chaincode event ::'+error);
-    }
+    async (error) => {
+      await notifyClient(result.notificationURL, {
+        error: true,
+        message: error
+      })
+    },
+    {startBlock}
   );
 
-  res.send({message: 'Registered'})
+  eventHub.connect(true);
+
+  registeredHandlers[`${channelName}_${chaincodeName}_${chaincodeEventName}`] = { handler, eventHub }
+
+  return Promise.resolve()
+}
+
+app.post('/notifications/add', async (req, res) => {
+  let chaincodeName = req.body.chaincodeName
+  let channelName = req.body.channelName
+  let chaincodeEventName = req.body.chaincodeEventName
+  let notificationURL = req.body.notificationURL
+  let startBlock = req.body.startBlock || 0
+
+  let result = notifications_db.get('notifications').find({
+    chaincodeName,
+    channelName,
+    chaincodeEventName,
+    startBlock
+  }).value()
+
+  if (!result) {
+    notifications_db.get('notifications').push({ chaincodeName, channelName, chaincodeEventName, notificationURL, startBlock }).write()
+    await registerNotification({ chaincodeName, channelName, chaincodeEventName, startBlock })
+    res.send({message: 'Registered successfully'})
+  } else {
+    res.send({error: true, message: 'Already added notification for this'})
+  }
 })
+
+app.post('/notifications/update', async (req, res) => {
+  let chaincodeName = req.body.chaincodeName
+  let channelName = req.body.channelName
+  let chaincodeEventName = req.body.chaincodeEventName
+  let notificationURL = req.body.notificationURL
+
+  let result = notifications_db.get('notifications').find({
+    chaincodeName,
+    channelName,
+    chaincodeEventName
+  }).value()
+
+  if (result) {
+    notifications_db.get('notifications').remove({ chaincodeName, channelName, chaincodeEventName }).write()
+    notifications_db.get('notifications').push({ chaincodeName, channelName, chaincodeEventName, notificationURL }).write()
+    res.send({message: 'Updated successfully'})
+  } else {
+    res.send({error: true, message: 'Not found'})
+  }
+})
+
+app.post('/notifications/remove', async (req, res) => {
+  let chaincodeName = req.body.chaincodeName
+  let channelName = req.body.channelName
+  let chaincodeEventName = req.body.chaincodeEventName
+
+  if(registeredHandlers[`${channelName}_${chaincodeName}_${chaincodeEventName}`]) {
+    registeredHandlers[`${channelName}_${chaincodeName}_${chaincodeEventName}`].eventHub.unregisterChaincodeEvent(registeredHandlers[`${channelName}_${chaincodeName}_${chaincodeEventName}`].handler, true)
+    notifications_db.get('notifications').remove({ chaincodeName, channelName, chaincodeEventName }).write()
+
+    res.send({message: 'Event unregistered and removed'})
+  } else {
+    res.send({error: true, message: 'Not found'})
+  }
+})
+
+app.get('/notifications/list', async (req, res) => {
+  res.send({
+    message: notifications_db.get('notifications').value()
+  })
+})
+
+//Register Events
+setTimeout(() => {
+  let result = notifications_db.get('notifications').value()
+
+  result.forEach(async (event) => {
+    console.log(event)
+    await registerNotification({ chaincodeName: event.chaincodeName, channelName: event.channelName, chaincodeEventName: event.chaincodeEventName, startBlock: event.startBlock})
+  })
+}, 10000)
 
 app.listen(3000, () => console.log('API Server Running'))
