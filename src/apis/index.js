@@ -422,7 +422,7 @@ app.post('/chaincodes/instantiate', async (req, res) => {
     if(args)
       request.args = args
 
-    let results = await channel.sendInstantiateProposal(request, 60000);
+    let results = await channel.sendInstantiateProposal(request, 90000);
 
     let proposalResponses = results[0];
     let proposal = results[1];
