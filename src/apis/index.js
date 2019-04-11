@@ -351,7 +351,6 @@ app.post('/chaincodes/install', async (req, res) => {
   
     let results = await client.installChaincode(request);
     let proposalResponses = results[0];
-    let proposal = results[1];
     let error_message = null;
     
     let all_good = true;
@@ -505,6 +504,228 @@ app.post('/chaincodes/instantiate', async (req, res) => {
 	} else {
 		let message = `Failed to instantiate. cause: ${error_message}`
     res.send({error: true, message})
+  }
+})
+
+app.post('/chaincodes/upgrade', async (req, res) => {
+  let chaincodeName = req.body.chaincodeName
+  let channelName = req.body.channelName
+  let fcn = req.body.fcn || null
+  let args = req.body.args
+  let chaincodeVersion = req.body.chaincodeVersion
+  let endorsmentPolicy = req.body.endorsmentPolicy || {
+    identities: [
+      { role: { name: 'member', mspId: orgName }},
+    ],
+    policy: {
+      '1-of':[{ 'signed-by': 0 }]
+    }
+  }
+
+  try {
+    args = JSON.parse(args)
+  } catch(e) {
+    res.send({error: true, message: `Args should be JSON string`})
+    return;
+  }
+
+  shell.cd(shareFileDir)
+
+  //1. Upload chaincode
+  if (fs.existsSync(`${shareFileDir}/chaincodes/${chaincodeName}`)) {
+    if(req.file) {
+      let filepath = path.join(req.file.destination, req.file.filename);
+      let unzipper = new Unzipper(filepath);
+
+      let currentVersion = fs.readdirSync(`${shareFileDir}/chaincodes/${chaincodeName}/`)[0]
+      let chaincodeLanguage = fs.readdirSync(`${shareFileDir}/chaincodes/${chaincodeName}/${currentVersion}/`)[0]
+
+      if(currentVersion === chaincodeVersion) {
+        res.send({error: true, message: `Version already exists`})
+        return;
+      }
+
+      shell.mkdir('-p', `${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/`)
+      unzipper.extract({ path:  `${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/`});
+  
+      setTimeout(async () => {
+        let folderName = chaincodeName
+        if (fs.existsSync(`${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/${folderName}`)) {
+          shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}/${currentVersion}`)  
+          shell.exec(`mv ${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/${folderName}/* ${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/`)
+          shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/${folderName}`)  
+          
+          //2. Install chaincode
+          hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
+          let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+          await client.initCredentialStores();
+          await client.setUserContext({username: "admin", password: "adminpw"});
+
+          if(chaincodeLanguage === 'golang') {
+            shell.exec(`mkdir -p /opt/gopath/src/chaincodes/${chaincodeName}/${chaincodeVersion}`)
+            shell.exec(`ln -s ${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/* /opt/gopath/src/chaincodes/${chaincodeName}/${chaincodeVersion}/`)
+            
+            let chaincodePath = null;
+
+            if(chaincodeLanguage === 'golang') {
+              chaincodePath = `chaincodes/${chaincodeName}/${chaincodeVersion}`
+            } else {
+              chaincodePath = `${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}`
+            }
+
+            let error_message = null;
+
+            if(chaincodeLanguage === 'golang') {
+              await executeCommand(`peer chaincode install -n ${chaincodeName} -p ${chaincodePath} -v ${chaincodeVersion} -l golang`)
+            } else {
+              let request = {
+                targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+                chaincodePath,
+                chaincodeId: chaincodeName,
+                chaincodeVersion: chaincodeVersion,
+                chaincodeType: chaincodeLanguage
+              };
+
+              let results = await client.installChaincode(request);
+              let proposalResponses = results[0];
+              
+
+              let all_good = true;
+              for (let i in proposalResponses) {
+                let one_good = false;
+                if (proposalResponses && proposalResponses[i].response &&
+                  proposalResponses[i].response.status === 200) {
+                  one_good = true;
+                }
+                all_good = all_good & one_good;
+              }
+              if (!all_good) {
+                error_message = 'Failed to send install Proposal or receive valid response. Response null or status is not 200'
+              }
+            
+              if (!error_message) {
+                await sleep.sleep(3000)
+              } else {
+                res.send({error: true, message: `Failed to install chaincode: ${error_message}`})
+                return;
+              }
+            }
+
+            //3. Now upgrade chaincode
+            try {
+              let channel = client.getChannel(channelName);
+              let tx_id = client.newTransactionID(true);
+              let deployId = tx_id.getTransactionID();
+
+              let request = {
+                targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+                chaincodeId: chaincodeName,
+                chaincodeType: chaincodeLanguage,
+                chaincodeVersion: chaincodeVersion,
+                txId: tx_id,
+                'endorsement-policy': endorsmentPolicy
+              }
+
+              if(fcn)
+                request.fcn = fcn;
+                  
+              if(args)
+                request.args = args
+
+              let results = await channel.sendUpgradeProposal(request, 90000);
+              let proposalResponses = results[0];
+              let proposal = results[1];
+              let all_good = true;
+
+              for (var i in proposalResponses) {
+                let one_good = false;
+                if (proposalResponses && proposalResponses[i].response &&
+                  proposalResponses[i].response.status === 200) {
+                  one_good = true;
+                }
+                all_good = all_good & one_good;
+              }
+              
+              if (all_good) {
+                let promises = [];
+                let event_hubs = channel.getChannelEventHubsForOrg();
+          
+                event_hubs.forEach((eh) => {
+                  let upgradeEventPromise = new Promise((resolve, reject) => {
+                    let event_timeout = setTimeout(() => {
+                      let message = 'REQUEST_TIMEOUT:' + eh.getPeerAddr();
+                      eh.disconnect();
+                    }, 60000);
+                    eh.registerTxEvent(deployId, (tx, code, block_num) => {
+                      clearTimeout(event_timeout);
+          
+                      if (code !== 'VALID') {
+                        let message = `The chaincode upgrade transaction was invalid, code: ${code}`
+                        reject(new Error(message));
+                      } else {
+                        let message = 'The chaincode upgrade transaction was valid.';
+                        resolve(message);
+                      }
+                    }, (err) => {
+                      clearTimeout(event_timeout);
+                      console.log(err);
+                      reject(err);
+                    },
+                      {unregister: true, disconnect: true}
+                    );
+                    eh.connect();
+                  });
+                  promises.push(upgradeEventPromise);
+                });
+          
+                let orderer_request = {
+                  txId: tx_id,
+                  proposalResponses: proposalResponses,
+                  proposal: proposal
+                };
+          
+                let sendPromise = channel.sendTransaction(orderer_request);
+                promises.push(sendPromise);
+                let results = await Promise.all(promises);
+          
+                let response = results.pop(); //  orderer results are last in the results
+                if (response.status !== 'SUCCESS') {
+                  error_message = `Failed to order the transaction. Error code: ${response.status}` 
+                }
+          
+                for(let i in results) {
+                  let event_hub_result = results[i];
+                  let event_hub = event_hubs[i];
+                  if(typeof event_hub_result === 'string') {
+                  } else {
+                    if(!error_message) error_message = event_hub_result.toString();
+                  }
+                }
+              } else {
+                error_message = `Failed to send Proposal and receive all good ProposalResponse`
+              }
+            } catch(error) {
+              error_message = error.toString();
+            }
+
+            if (!error_message) {
+              let message = `Successfully upgraded chaincode in organization ${orgName} to the channel ${channelName}` 
+              res.send({message})
+            } else {
+              let message = `Failed to upgrade. cause: ${error_message}`
+              res.send({error: true, message})
+            }
+          }
+        } else {
+          shell.exec(`rm -rf ${shareFileDir}/chaincodes/${chaincodeName}`)
+          res.send({error: true, message: 'Chaincode directory name wrong'})
+        }
+      }, 3000)
+    } else {
+      res.send({error: true, message: 'Chaincode missing'})
+    }    
+  } else {
+    res.send({error: true, message: 'Chaincode doesn\'t exist' })
   }
 })
 
