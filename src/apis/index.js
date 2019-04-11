@@ -724,8 +724,7 @@ app.post('/notifications/add', async (req, res) => {
   let result = notifications_db.get('notifications').find({
     chaincodeName,
     channelName,
-    chaincodeEventName,
-    startBlock
+    chaincodeEventName
   }).value()
 
   if (!result) {
