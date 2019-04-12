@@ -1114,6 +1114,17 @@ app.get('/explore/getLatestBlock', async (req, res) => {
   }
 })
 
+app.get('/explore/getBlock', async (req, res) => {
+  let channelName = req.query.channelName
+  let blockNumber = req.query.blockNumber
+  try {
+    let blockDetails = await getBlockDetailsByNumber(channelName, blockNumber)
+    res.send({message: blockDetails})
+  } catch(error) {
+    res.send({error: true, message: error})
+  }
+})
+
 app.get('/explore/getTransaction', async (req, res) => {
   let txnId = req.query.txnId
   let channelName = req.query.channelName
@@ -1211,6 +1222,33 @@ app.get('/explore/organisations', async (req, res) => {
 
     res.send({
       message: orgs
+    })
+
+  } catch(error) {
+    res.send({
+      message: error,
+      error: true
+    })
+  }
+})
+
+app.get('/explore/chaincodesInstantiated', async (req, res) => {
+  try {
+    shell.cd(shareFileDir)
+    hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+
+    let channelName = req.query.channelName
+
+    let channel = client.getChannel(channelName);
+    let result = await channel.queryInstantiatedChaincodes(`peer0.peer.${orgName.toLowerCase()}.com`)
+
+    console.log(result)
+
+    res.send({
+      message: result.chaincodes
     })
 
   } catch(error) {
