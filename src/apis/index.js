@@ -14,6 +14,7 @@ const atob = require('atob');
 const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const request = require('request');
+const getSize = require('get-folder-size');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
