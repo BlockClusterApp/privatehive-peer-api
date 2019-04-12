@@ -11,6 +11,7 @@ const orgName = toPascalCase(process.env.ORG_NAME) || 'Blockcluster'
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto'
 const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
 const anchorPort = process.env.ANCHOR_PORT || 7051
+const instanceId = process.env.INSTANCE_ID
 
 async function updateStatus() {
   return new Promise((resolve, reject) => {
@@ -25,7 +26,7 @@ async function updateStatus() {
         if (!err) {
           let db = database.db(Config.getDatabase());
           db.collection("privatehivePeers").updateOne(
-            { instanceId: orgName.toLowerCase() },
+            { instanceId },
             { $set: { status: "running" } },
             function(err, res) {
               if(err) {

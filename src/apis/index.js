@@ -140,6 +140,7 @@ app.post('/channel/create', async (req, res) => {
         res.send({error: true, message: 'An error occured'})
       }
 		} else {
+      console.log(response)
       res.send({error: true, message: 'Failed to create channel'})
 		}
   } else {

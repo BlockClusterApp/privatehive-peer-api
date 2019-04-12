@@ -1,5 +1,5 @@
 const MongoClient = require("mongodb").MongoClient;
-const instanceId = process.env.ORG_NAME.toLowerCase();
+const instanceId = process.env.INSTANCE_ID;
 const Config = require("./config");
 
 MongoClient.connect(
