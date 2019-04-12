@@ -38,7 +38,7 @@ async function executeCommand(cmd) {
   }
 }
 
-app.get('/channelConfigCerts', (req, res) => {
+app.get('/config/channelConfigCerts', (req, res) => {
   let result = {}
 
   result.adminCert = fs.readFileSync(`${shareFileDir}/crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/msp/admincerts/Admin@peer.${orgName.toLowerCase()}.com-cert.pem`, "utf8");
@@ -47,10 +47,16 @@ app.get('/channelConfigCerts', (req, res) => {
   res.send(result)
 })
 
-app.get('/orgDetails', (req, res) => {
+app.get('/config/orgDetails', (req, res) => {
   let details = fs.readFileSync(shareFileDir + `/${orgName.toLowerCase()}.json`, 'utf8')
   res.send({message: details})
 })
+
+app.get('/config/connectionProfile', (req, res) => {
+  let details = fs.readFileSync(shareFileDir + `/network-map.yaml`, 'utf8')
+  res.send({message: details})
+})
+
 
 app.post('/channel/create', async (req, res) => {
   let channelName = req.body.name.toLowerCase()
@@ -1246,8 +1252,6 @@ app.get('/explore/chaincodesInstantiated', async (req, res) => {
 
     let channel = client.getChannel(channelName);
     let result = await channel.queryInstantiatedChaincodes(`peer0.peer.${orgName.toLowerCase()}.com`)
-
-    console.log(result)
 
     res.send({
       message: result.chaincodes
