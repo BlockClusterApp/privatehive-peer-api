@@ -1190,6 +1190,37 @@ app.get('/explore/getBlocks', async (req, res) => {
   }
 })
 
+app.get('/explore/organisations', async (req, res) => {
+  try {
+    shell.cd(shareFileDir)
+    hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+
+    let channelName = req.query.channelName
+
+    let channel = client.getChannel(channelName);
+    let result = await channel.getChannelConfigFromOrderer()
+
+    let orgs = []
+
+    for (let orgName in result.config.channel_group.groups.map.Application.value.groups.map) {
+      orgs.push(orgName)
+    }
+
+    res.send({
+      message: orgs
+    })
+
+  } catch(error) {
+    res.send({
+      message: error,
+      error: true
+    })
+  }
+})
+
 //Register Events
 setTimeout(() => {
   let result = notifications_db.get('notifications').value()
