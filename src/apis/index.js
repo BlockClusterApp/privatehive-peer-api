@@ -38,7 +38,7 @@ async function executeCommand(cmd) {
   }
 }
 
-app.get('/config/channelConfigCerts', (req, res) => {
+app.get('/config/cryptoCerts', (req, res) => {
   let result = {}
 
   result.adminCert = fs.readFileSync(`${shareFileDir}/crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/msp/admincerts/Admin@peer.${orgName.toLowerCase()}.com-cert.pem`, "utf8");
