@@ -920,6 +920,8 @@ let registerNotification = async ({ chaincodeName, channelName, chaincodeEventNa
       notifications_db.get('notifications').find({ chaincodeName, channelName, chaincodeEventName }).assign({ startBlock: parseInt(block_num)}).write()
     },
     async (error) => {
+      let result = notifications_db.get('notifications').find({ chaincodeName, channelName, chaincodeEventName }).value()
+
       await notifyClient(result.notificationURL, {
         error: true,
         message: error
@@ -999,12 +1001,200 @@ app.get('/notifications/list', async (req, res) => {
   })
 })
 
+let getBlockDetailsByNumber = async (channelName, blockNumber) => {
+  try {
+		shell.cd(shareFileDir)
+    hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+
+		let channel = client.getChannel(channelName);
+    
+    if(!channel) {
+      return Promise.reject('Channel not found')
+		}
+
+    let response_payload = await channel.queryBlock(parseInt(blockNumber), `peer0.peer.${orgName.toLowerCase()}.com`);
+    
+		if (response_payload) {
+
+      let details = {}
+      details.blockNumber = blockNumber
+      details.blockHash = response_payload.header.data_hash
+      details.totalTxns =  response_payload.data.data.length
+      details.txns = []
+
+      response_payload.data.data.forEach((txn) => {
+        details.txns.push({
+          txnid: txn.payload.header.channel_header.tx_id,
+          creatorMSPID: txn.payload.header.signature_header.creator.Mspid,
+          data: txn.payload.data 
+        })
+      })
+
+      return Promise.resolve(details)
+		} else {
+			return Promise.reject('Response payload not found')
+		}
+	} catch(error) {
+		return Promise.reject(error.stack ? error.stack : error)
+	}
+}
+
+let getLatestBlock = async (channelName) => {
+  try {
+		shell.cd(shareFileDir)
+    hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+
+    let channel = client.getChannel(channelName);
+    
+    if(!channel) {
+      return Promise.reject('Channel not found')
+    }
+    
+    let response_payload = await channel.queryInfo(`peer0.peer.${orgName.toLowerCase()}.com`);
+    let latestBlockNumber = response_payload.height - 1
+    let blockDetails = await getBlockDetailsByNumber(channelName, latestBlockNumber)
+
+    return Promise.resolve(blockDetails)
+  } catch(error) {
+    return Promise.reject(error.stack ? error.stack : error)
+  }
+}
+
+let getTransactionByID = async (channelName, txId) => {
+  try {
+    shell.cd(shareFileDir)
+    hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
+    let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
+    await client.initCredentialStores();
+    await client.setUserContext({username: "admin", password: "adminpw"});
+
+    let channel = client.getChannel(channelName);
+    
+    if(!channel) {
+      return Promise.reject('Channel not found')
+    }
+
+    let response_payload = await channel.queryTransaction(txId, `peer0.peer.${orgName.toLowerCase()}.com`);
+		if (response_payload) {
+			return Promise.resolve(response_payload)
+		} else {
+      return Promise.reject('Payload not found')
+		}
+  } catch(error) {
+    return Promise.reject(error.stack ? error.stack : error)
+  }
+}
+
+let getDirSize = async (myFolder) => {
+  return new Promise((resolve, reject) => {
+    getSize(myFolder, function(err, size) {
+      if (err) {
+        resolve(0)
+      } else {
+        resolve(size)
+      }
+    });
+  })
+}
+
+app.get('/explore/getLatestBlock', async (req, res) => {
+  let channelName = req.query.channelName
+  try {
+    let blockDetails = await getLatestBlock(channelName)
+
+    res.send({message: blockDetails})
+  } catch(error) {
+    res.send({error: true, message: error})
+  }
+})
+
+app.get('/explore/getTransaction', async (req, res) => {
+  let txnId = req.query.txnId
+  let channelName = req.query.channelName
+
+  try {
+    let txnDetails = await getTransactionByID(channelName, txnId)
+    res.send({message: txnDetails})
+  } catch(error) {
+    res.send({error: true, message: error})
+  }
+})
+
+app.get('/explore/size', async (req, res) => {
+  try {
+    let size = await getDirSize(shareFileDir);
+    res.send({
+      message: size
+    })
+  } catch (e) {
+    res.send({
+      error: true,
+      message: 'An error occured'
+    })
+  }
+})
+
+app.get('/explore/getBlocks', async (req, res) => {
+  try {
+    let channelName = req.query.channelName
+    let latestBlock = await getLatestBlock(channelName)
+    let end = req.query.end || latestBlock.blockNumber;
+    let start = req.query.start;
+
+    if(end > await latestBlock.blockNumber) {
+      res.send({
+        error: true,
+        message: 'End block doesn\'t exist'
+      })
+
+      return;
+    }
+
+    if(!start) {
+      if(end - 30 < 0) {
+        start = 0
+      } else {
+        start = end - 30
+      }
+    }
+
+    if (end === start || end < start) {
+      res.send({
+        error: true,
+        message: 'End should be greater than start'
+      })
+
+      return;
+    }
+
+    let blocks = []
+
+    for (let count = start; count <= end; count++) {
+      blocks.push(await getBlockDetailsByNumber(channelName, count))
+    }
+
+    res.send({
+      message: blocks
+    })
+  } catch (e) {
+    res.send({
+      error: true,
+      message: e
+    })
+  }
+})
+
 //Register Events
 setTimeout(() => {
   let result = notifications_db.get('notifications').value()
 
   result.forEach(async (event) => {
-    console.log(event)
     await registerNotification({ chaincodeName: event.chaincodeName, channelName: event.channelName, chaincodeEventName: event.chaincodeEventName, startBlock: event.startBlock})
   })
 }, 10000)
