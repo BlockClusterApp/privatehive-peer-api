@@ -122,8 +122,9 @@ app.post('/channel/create', async (req, res) => {
 
       let result = await channel.joinChannel(join_request);
 
-      if(result.response) {
-        if(result.response.status == 200) {
+
+      if(result[0].response) {
+        if(result[0].response.status == 200) {
           res.send({message: 'Created and joined channel'})
         } else {
           res.send({error: true, message: 'An error occured'})
@@ -189,8 +190,8 @@ app.post('/channel/join', async (req, res) => {
 
     let result = await channel.joinChannel(join_request);
 
-    if(result.response) {
-      if(result.response.status == 200) {
+    if(result[0].response) {
+      if(result[0].response.status == 200) {
         res.send({message: 'Created and joined channel'})
       } else {
         res.send({error: true, message: 'An error occured'})
