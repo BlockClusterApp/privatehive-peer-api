@@ -268,11 +268,13 @@ app.get('/channels/list', async (req, res) => {
 
   if(networkMap.channels) {
     for(let channelName in networkMap.channels) {
+      let connectionDetails = networkMap.orderers[networkMap.channels[channelName].orderers[0]].url
       let ordererOrgName = networkMap.channels[channelName].orderers[0].substring(8)
       ordererOrgName = toPascalCase(ordererOrgName.substring(0, ordererOrgName.length - 4)) 
       channels.push({
         name: channelName,
-        ordererOrgName
+        ordererOrgName,
+        connectionDetails
       })
     }
   }
