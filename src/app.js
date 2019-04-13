@@ -12,6 +12,7 @@ const shareFileDir = process.env.SHARE_FILE_DIR || './crypto'
 const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
 const anchorPort = process.env.ANCHOR_PORT || 7051
 const instanceId = process.env.INSTANCE_ID
+const caPort = process.env.CA_PORT || 7054
 
 async function updateStatus() {
   return new Promise((resolve, reject) => {
@@ -163,11 +164,11 @@ async function updateStatus() {
     }
   
     networkMap.peers[`peer0.peer.${orgName.toLowerCase()}.com`] =  {
-      "url": `grpc://localhost:7051`
+      "url": `grpc://${workerNodeIP}:${anchorPort}`
     }
   
     networkMap.certificateAuthorities[`ca-${orgName.toLowerCase()}`] = {
-      "url": "http://localhost:7054",
+      "url":  `http://${workerNodeIP}:${caPort}`,
       "httpOptions": {
         "verify": false
       },

@@ -15,6 +15,7 @@ const low = require('lowdb')
 const FileSync = require('lowdb/adapters/FileSync')
 const request = require('request');
 const getSize = require('get-folder-size');
+const zip = require('node-zip-dir');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
@@ -38,11 +39,13 @@ async function executeCommand(cmd) {
   }
 }
 
-app.get('/config/cryptoCerts', (req, res) => {
-  let result = {}
+app.get('/config/ordererCerts', (req, res) => {
+  let result = {
+    message: {}
+  }
 
-  result.adminCert = fs.readFileSync(`${shareFileDir}/crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/msp/admincerts/Admin@peer.${orgName.toLowerCase()}.com-cert.pem`, "utf8");
-  result.caCert = fs.readFileSync(`${shareFileDir}/crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/msp/cacerts/ca.peer.${orgName.toLowerCase()}.com-cert.pem`, "utf8");
+  result.message.adminCert = fs.readFileSync(`${shareFileDir}/crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/msp/admincerts/Admin@peer.${orgName.toLowerCase()}.com-cert.pem`, "utf8");
+  result.message.caCert = fs.readFileSync(`${shareFileDir}/crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/msp/cacerts/ca.peer.${orgName.toLowerCase()}.com-cert.pem`, "utf8");
 
   res.send(result)
 })
@@ -55,6 +58,12 @@ app.get('/config/orgDetails', (req, res) => {
 app.get('/config/connectionProfile', (req, res) => {
   let details = fs.readFileSync(shareFileDir + `/network-map.yaml`, 'utf8')
   res.send({message: details})
+})
+
+app.get('/config/cryptoConfig', async (req, res) => {
+  let dirPath = shareFileDir + "/crypto-config";
+  await zip.zip(dirPath, shareFileDir + '/crypto-config.zip')
+  res.download(shareFileDir + '/crypto-config.zip');
 })
 
 
