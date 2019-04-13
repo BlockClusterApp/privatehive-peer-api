@@ -141,6 +141,11 @@ app.post('/channel/create', async (req, res) => {
 
       if(result[0].response) {
         if(result[0].response.status == 200) {
+
+          //update anchor peer
+          await executeCommand(`FABRIC_CFG_PATH=$PWD configtxgen -profile OneOrgChannel -outputAnchorPeersUpdate ./${orgName}_${channelName}_AnchorUpdate.tx -channelID ${channelName} -asOrg ${orgName}`)
+          await executeCommand(`peer channel update -o ${ordererURL} -c ${channelName} -f ./${orgName}_${channelName}_AnchorUpdate.tx`)
+
           res.send({message: 'Created and joined channel'})
         } else {
           res.send({error: true, message: 'An error occured'})
@@ -789,7 +794,8 @@ app.post('/chaincodes/invoke', async (req, res) => {
 
     var all_good = true;
 		for (var i in proposalResponses) {
-			let one_good = false;
+      let one_good = false;
+      console.log(proposalResponses[i].response)
 			if (proposalResponses && proposalResponses[i].response &&
 				proposalResponses[i].response.status === 200) {
 				one_good = true;
