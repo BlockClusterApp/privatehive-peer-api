@@ -100,6 +100,15 @@ async function updateStatus() {
         shell.exec(`mv crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/ca/${fileName} crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/ca/privateKey`)
       }
     })
+
+    files = fs.readdirSync(`crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/peers/peer0.peer.${orgName.toLowerCase()}.com/msp/keystore/`)
+    files.forEach(fileName => {
+      if(fileName.indexOf('_sk') > -1) {
+        shell.exec(`mv crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/peers/peer0.peer.${orgName.toLowerCase()}.com/msp/keystore/${fileName} crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/peers/peer0.peer.${orgName.toLowerCase()}.com/msp/keystore/privateKey`)
+      }
+    })
+
+    shell.exec(`discover --configFile discover_conf.yaml --userKey crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/peers/peer0.peer.${orgName.toLowerCase()}.com/msp/keystore/privateKey --userCert crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/peers/peer0.peer.${orgName.toLowerCase()}.com/msp/signcerts/peer0.peer.${orgName.toLowerCase()}.com-cert.pem  --MSP ${orgName} saveConfig`)
   
     files = fs.readdirSync(`crypto-config/peerOrganizations/peer.${orgName.toLowerCase()}.com/users/Admin@peer.${orgName.toLowerCase()}.com/msp/keystore/`)
     files.forEach(fileName => {

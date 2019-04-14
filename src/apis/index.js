@@ -776,9 +776,19 @@ app.post('/chaincodes/invoke', async (req, res) => {
   
     var tx_id = client.newTransactionID();
     tx_id_string = tx_id.getTransactionID();
+
+    let targets = [];
+
+    let networkMap = jsYaml.safeLoad(fs.readFileSync('./network-map.yaml', 'utf8'));
+
+    for(let peerDomain in networkMap.channels[channelName].peers) {
+      targets.push(peerDomain)
+    }
+
+    console.log(targets)
   
     var request = {
-      targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
+      targets,
       chaincodeId: chaincodeName,
       fcn: fcn,
       args: args,
@@ -1291,5 +1301,59 @@ setTimeout(() => {
     await registerNotification({ chaincodeName: event.chaincodeName, channelName: event.channelName, chaincodeEventName: event.chaincodeEventName, startBlock: event.startBlock})
   })
 }, 10000)
+
+//Discover Peers and Add them to network-map.yaml
+let discover = async () => {
+  shell.cd(shareFileDir)
+
+  let runCommand = async (channelName) => {
+    return new Promise((resolve, reject) => {
+      shell.exec(`discover --configFile ${shareFileDir}/discover_conf.yaml peers --channel ${channelName}  --server localhost:7051`, function(code, stdout, stderr) {
+        if(code !== 0 || stderr) {
+          reject()
+        } else {
+          let peers = JSON.parse(stdout);
+          let networkMapFile = jsYaml.safeLoad(fs.readFileSync(`${shareFileDir}/network-map.yaml`, 'utf8'));
+
+          if(networkMapFile) {
+            if(networkMapFile.peers) {
+
+              peers.forEach((peer) => {
+                networkMapFile.peers[`peer0.peer.${peer.MSPID.toLowerCase()}.com`] = {
+                  "url": `grpc://${peer.Endpoint}`
+                }
+    
+                networkMapFile.channels[channelName].peers[`peer0.peer.${peer.MSPID.toLowerCase()}.com`] = {
+                  "chaincodeQuery": true,
+                  "ledgerQuery": true,
+                  "eventSource": true
+                }
+    
+                fs.writeFileSync(`${shareFileDir}/network-map.yaml`,  yamlJs.stringify(networkMapFile))
+              })
+            }  
+          }
+          resolve()
+        }
+      });
+    })
+  }
+
+  let networkMap = jsYaml.safeLoad(fs.readFileSync(`${shareFileDir}/network-map.yaml`, 'utf8'));
+
+  try {
+    if(networkMap.channels) {
+      for(let channelName in networkMap.channels) {
+        await runCommand(channelName)    
+      }
+    }
+  } catch(e) {
+    console.log('An exception occured', e)
+  }
+
+  setTimeout(discover, 5000)
+}
+
+setTimeout(discover, 5000)
 
 app.listen(3000, () => console.log('API Server Running'))
