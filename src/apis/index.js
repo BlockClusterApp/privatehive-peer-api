@@ -19,6 +19,8 @@ const zip = require('node-zip-dir');
 
 const shareFileDir = process.env.SHARE_FILE_DIR || './crypto' 
 const orgName = toPascalCase(process.env.ORG_NAME)
+const workerNodeIP = process.env.WORKER_NODE_IP || '127.0.0.1'
+const anchorPort = process.env.ANCHOR_PORT || 7051
 
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -61,7 +63,11 @@ app.get('/config/connectionProfile', (req, res) => {
 })
 
 app.get('/config/cryptoConfig', async (req, res) => {
-  let dirPath = shareFileDir + "/crypto-config";
+
+  shell.exec(`mkdir -p ${shareFileDir}/downloads/cryptoConfig/crypto-config/`)
+  shell.exec(`cp -a ${shareFileDir}/crypto-config/. ${shareFileDir}/downloads/cryptoConfig/crypto-config/`)
+
+  let dirPath = `${shareFileDir}/downloads/cryptoConfig/`;
   await zip.zip(dirPath, shareFileDir + '/crypto-config.zip')
   res.download(shareFileDir + '/crypto-config.zip');
 })
@@ -214,7 +220,29 @@ app.post('/channel/join', async (req, res) => {
 
     if(result[0].response) {
       if(result[0].response.status == 200) {
-        res.send({message: 'Created and joined channel'})
+        try {
+          await executeCommand(`screen -d -m configtxlator start`)
+          await sleep.sleep(2000)
+          await executeCommand(`peer channel fetch config config_block.pb -o ${ordererURL} -c ${channelName} `)
+          await executeCommand(`configtxlator proto_decode --input config_block.pb --type common.Block | jq .data.data[0].payload.data.config > config.json`)
+          await executeCommand(`jq '.channel_group.groups.Application.groups.${orgName}.values.AnchorPeers={"mod_policy": "Admins", "value": {"anchor_peers": [{"host": "${workerNodeIP}", "port": ${anchorPort}}]},"version": "0"}' config.json > modified_config.json`)
+          await executeCommand(`configtxlator proto_encode --input config.json --type common.Config --output config.pb`)
+          await executeCommand(`configtxlator proto_encode --input modified_config.json --type common.Config --output modified_config.pb`)
+          await executeCommand(`configtxlator compute_update --channel_id ${channelName} --original config.pb --updated modified_config.pb --output ${orgName.toLowerCase()}_update.pb`)
+          await executeCommand(`configtxlator proto_decode --input ${orgName.toLowerCase()}_update.pb --type common.ConfigUpdate | jq . > ${orgName.toLowerCase()}_update.json`)
+          await executeCommand(`echo '{"payload":{"header":{"channel_header":{"channel_id":"${channelName}", "type":2}},"data":{"config_update":'$(cat ${orgName.toLowerCase()}_update.json)'}}}' | jq . > ${orgName.toLowerCase()}_update_in_envelope.json`)
+          await executeCommand(`configtxlator proto_encode --input ${orgName.toLowerCase()}_update_in_envelope.json --type common.Envelope --output ${orgName.toLowerCase()}_update_in_envelope.pb`)
+          await executeCommand(`peer channel signconfigtx -f ${orgName.toLowerCase()}_update_in_envelope.pb`)
+          await executeCommand(`peer channel update -f ${orgName.toLowerCase()}_update_in_envelope.pb -c ${channelName} -o  ${ordererURL}`)
+          await executeCommand(`rm config_block.pb config.json modified_config.json config.pb modified_config.pb ${orgName.toLowerCase()}_update.pb ${orgName.toLowerCase()}_update.json ${orgName.toLowerCase()}_update_in_envelope.json ${orgName.toLowerCase()}_update_in_envelope.pb`)
+          await executeCommand(`screen -ls | grep Detached | cut -d. -f1 | awk '{print $1}' | xargs kill`)
+
+          res.send({message: 'Created and joined channel'})
+        } catch (e) {
+          console.log(e)
+          res.send({error: true, message: e})
+        }
+        
       } else {
         res.send({error: true, message: 'An error occured'})
       }
@@ -255,6 +283,7 @@ app.post('/channel/addOrg', async (req, res) => {
     await executeCommand(`curl -X POST --data-binary @config_update_in_envelope.json "$CONFIGTXLATOR_URL/protolator/encode/common.Envelope" > config_update_in_envelope.pb`)
     await executeCommand(`peer channel signconfigtx -f config_update_in_envelope.pb`)
     await executeCommand(`peer channel update -f config_update_in_envelope.pb -c ${channelName} -o ${ordererURL}`)
+    await executeCommand(`rm config_block.json config.json updated_config.json config.pb updated_config.pb config_update.pb config_update.json config_update_in_envelope.json`)
     await executeCommand(`screen -ls | grep Detached | cut -d. -f1 | awk '{print $1}' | xargs kill`)
 
     console.log("Success in running commands")
@@ -413,6 +442,8 @@ app.post('/chaincodes/instantiate', async (req, res) => {
     }
   }
 
+  let collectionsConfig = req.body.collectionsConfig || ''
+
   shell.cd(shareFileDir)
 
   hfc.setConfigSetting('network-map', shareFileDir + "/network-map.yaml");
@@ -431,6 +462,7 @@ app.post('/chaincodes/instantiate', async (req, res) => {
     let tx_id = client.newTransactionID(true);
     let deployId = tx_id.getTransactionID();
 
+
     let request = {
       targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
       chaincodeId: chaincodeName,
@@ -440,11 +472,18 @@ app.post('/chaincodes/instantiate', async (req, res) => {
       'endorsement-policy': endorsmentPolicy
     }
 
-    if(fcn)
+    if(fcn) {
       request.fcn = fcn;
-        
-    if(args)
+    }
+    
+    if(args) {
       request.args = args
+    }
+    
+    if(collectionsConfig) {
+      fs.writeFileSync(`${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}/collections-config.json`, JSON.stringify(collectionsConfig) , 'utf-8'); 
+      request['collections-config'] = `${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}/collections-config.json`
+    }  
 
     let results = await channel.sendInstantiateProposal(request, 90000);
 
@@ -538,19 +577,28 @@ app.post('/chaincodes/upgrade', async (req, res) => {
   let fcn = req.body.fcn || null
   let args = req.body.args
   let chaincodeVersion = req.body.chaincodeVersion
-  let endorsmentPolicy = req.body.endorsmentPolicy || {
-    identities: [
-      { role: { name: 'member', mspId: orgName }},
+  let endorsmentPolicy = req.body.endorsmentPolicy || `{
+    "identities": [
+      { "role": { "name": "member", "mspId": "${orgName}" }}
     ],
-    policy: {
-      '1-of':[{ 'signed-by': 0 }]
+    "policy": {
+      "1-of":[{ "signed-by": 0 }]
     }
-  }
+  }`
+
+  let collectionsConfig = req.body.collectionsConfig || ''
 
   try {
     args = JSON.parse(args)
   } catch(e) {
     res.send({error: true, message: `Args should be JSON string`})
+    return;
+  }
+
+  try {
+    endorsmentPolicy = JSON.parse(endorsmentPolicy)
+  } catch(e) {
+    res.send({error: true, message: `Endorsement should be valid JSON`})
     return;
   }
 
@@ -656,6 +704,12 @@ app.post('/chaincodes/upgrade', async (req, res) => {
                   
               if(args)
                 request.args = args
+
+              if(collectionsConfig) {
+                collectionsConfig = JSON.parse(collectionsConfig)
+                fs.writeFileSync(`${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/collections-config.json`, JSON.stringify(collectionsConfig) , 'utf-8'); 
+                request['collections-config'] = `${shareFileDir}/chaincodes/${chaincodeName}/${chaincodeVersion}/${chaincodeLanguage}/collections-config.json`
+              }
 
               let results = await channel.sendUpgradeProposal(request, 90000);
               let proposalResponses = results[0];
@@ -785,8 +839,6 @@ app.post('/chaincodes/invoke', async (req, res) => {
       targets.push(peerDomain)
     }
 
-    console.log(targets)
-  
     var request = {
       targets,
       chaincodeId: chaincodeName,
@@ -795,6 +847,8 @@ app.post('/chaincodes/invoke', async (req, res) => {
       chainId: channelName,
       txId: tx_id
     };
+
+    console.log(request)
   
     let results = await channel.sendTransactionProposal(request);
   
@@ -1308,7 +1362,7 @@ let discover = async () => {
 
   let runCommand = async (channelName) => {
     return new Promise((resolve, reject) => {
-      shell.exec(`discover --configFile ${shareFileDir}/discover_conf.yaml peers --channel ${channelName}  --server localhost:7051`, function(code, stdout, stderr) {
+      shell.exec(`discover --configFile ${shareFileDir}/discover_conf.yaml peers --channel ${channelName}  --server localhost:7051`, {silent: true}, function(code, stdout, stderr) {
         if(code !== 0 || stderr) {
           reject()
         } else {

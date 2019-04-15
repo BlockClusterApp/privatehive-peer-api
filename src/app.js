@@ -71,13 +71,23 @@ async function updateStatus() {
         AnchorPeers:
           - Host: ${workerNodeIP}
             Port: ${anchorPort}
+      Capabilities:      
+        Channel: &ChannelCapabilities
+            V1_3: true
+        Orderer: &OrdererCapabilities
+            V1_3: true
+        Application: &ApplicationCapabilities
+            V1_3: true
+            V1_2: false
+            V1_1: false
       Profiles:
         OneOrgChannel:
           Consortium: SingleMemberConsortium
           Application:
               Organizations:
                   - *${orgName}
-  
+              Capabilities:
+                <<: *ApplicationCapabilities
       Channel: &ChannelDefaults
         Policies:
           Readers:
@@ -89,6 +99,8 @@ async function updateStatus() {
           Admins:
             Type: ImplicitMeta
             Rule: "ANY Admins"
+        Capabilities:
+          <<: *ChannelCapabilities
     `
   
     fs.writeFileSync('./configtx.yaml', configTxYaml)
