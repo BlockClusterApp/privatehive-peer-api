@@ -841,8 +841,13 @@ app.post('/chaincodes/invoke', async (req, res) => {
       }
     }
 
+    channel.initialize({
+        discover: true,
+        target: `peer0.peer.${orgName.toLowerCase()}.com`,
+        asLocalhost: false
+    })
+
     var request = {
-      targets,
       chaincodeId: chaincodeName,
       fcn: fcn,
       args: args,
@@ -1382,7 +1387,9 @@ let discover = async () => {
                 networkMapFile.channels[channelName].peers[`peer0.peer.${peer.MSPID.toLowerCase()}.com`] = {
                   "chaincodeQuery": true,
                   "ledgerQuery": true,
-                  "eventSource": true
+                  "eventSource": true,
+                  "discover": true,
+                  "endorsingPeer": true
                 }
     
                 fs.writeFileSync(`${shareFileDir}/network-map.yaml`,  yamlJs.stringify(networkMapFile))
