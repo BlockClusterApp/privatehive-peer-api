@@ -836,7 +836,9 @@ app.post('/chaincodes/invoke', async (req, res) => {
     let networkMap = jsYaml.safeLoad(fs.readFileSync('./network-map.yaml', 'utf8'));
 
     for(let peerDomain in networkMap.channels[channelName].peers) {
-      targets.push(peerDomain)
+      if(networkMap.peers[peerDomain].chaincodes.includes(chaincodeName)) {
+        targets.push(peerDomain)
+      }
     }
 
     var request = {
@@ -1371,12 +1373,12 @@ let discover = async () => {
 
           if(networkMapFile) {
             if(networkMapFile.peers) {
-
+              networkMapFile.channels[channelName].peers = {} //clear it first
               peers.forEach((peer) => {
                 networkMapFile.peers[`peer0.peer.${peer.MSPID.toLowerCase()}.com`] = {
-                  "url": `grpc://${peer.Endpoint}`
+                  "url": `grpc://${peer.Endpoint}`,
+                  "chaincodes": peer.Chaincodes || []
                 }
-    
                 networkMapFile.channels[channelName].peers[`peer0.peer.${peer.MSPID.toLowerCase()}.com`] = {
                   "chaincodeQuery": true,
                   "ledgerQuery": true,
