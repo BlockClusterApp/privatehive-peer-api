@@ -392,6 +392,8 @@ app.post('/chaincodes/install', async (req, res) => {
   }
 
   if(langauge === 'golang') {
+    //for golang some sort of extra steps are required for installing chaincode.....otherwise not found module error is thrown. 
+    //peer install command does those automatically.
     await executeCommand(`peer chaincode install -n ${chaincodeName} -p ${chaincodePath} -v ${version} -l golang`)
     res.send({message: 'Chaincode installed successfully'})
   } else {
@@ -816,11 +818,16 @@ app.post('/chaincodes/invoke', async (req, res) => {
 
   let channelName = req.body.channelName
   let chaincodeName = req.body.chaincodeName
-  let fcn = req.body.fcn
+  let fcn = req.body.fcn || ''
   let args = req.body.args
 
   try {
-  
+    args.unshift(fcn)
+    await executeCommand(`peer chaincode invoke -C ${channelName} -n ${chaincodeName} -c '{"Args":${JSON.stringify(args)}}'`)
+    res.send({message: 'Invoked successfully'})
+
+    /* JS code works fine but the issue is we have to calculate the targets for endorsement manually using endorsment policy and collections config policies. peer invoke does this for us */
+    /*
     hfc.setConfigSetting('network-map', shareFileDir + '/network-map.yaml');
     let client = hfc.loadFromConfig(hfc.getConfigSetting('network-map'));
     await client.initCredentialStores();
@@ -842,11 +849,37 @@ app.post('/chaincodes/invoke', async (req, res) => {
     }
 
     channel.initialize({
-        discover: true,
-        target: `peer0.peer.${orgName.toLowerCase()}.com`,
-        asLocalhost: false
+      discover: true,
+      target: `peer0.peer.${orgName.toLowerCase()}.com`,
+      asLocalhost: false
     })
 
+    let collections = []
+
+
+    try {
+      let collectionsQuery = await channel.queryCollectionsConfig({
+        chaincodeId: chaincodeName,
+        target: `peer0.peer.${orgName.toLowerCase()}.com`
+      })
+
+      collectionsQuery.forEach((collection) => {  
+        collections.push(collection.name)
+      })
+    } catch(e) {
+    }
+
+    try {
+      let plan = await channel.getEndorsementPlan({
+        chaincodes: [{
+          name: chaincodeName,
+          collection_names: collections
+        }]
+      })
+    } catch(e) {
+      res.send({error: true, message: e}); return;
+    }
+    
     var request = {
       chaincodeId: chaincodeName,
       fcn: fcn,
@@ -927,7 +960,9 @@ app.post('/chaincodes/invoke', async (req, res) => {
 			}
 		} else {
 			error_message = 'Failed to send Proposal and receive all good ProposalResponse';
-		}
+    }
+    
+    */
   } catch(error) {
     error_message = error.toString();
   }
