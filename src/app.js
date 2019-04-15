@@ -74,20 +74,10 @@ async function updateStatus() {
       Capabilities:      
         Channel: &ChannelCapabilities
             V1_3: true
-        Orderer: &OrdererCapabilities
-            V1_3: true
         Application: &ApplicationCapabilities
             V1_3: true
             V1_2: false
             V1_1: false
-      Profiles:
-        OneOrgChannel:
-          Consortium: SingleMemberConsortium
-          Application:
-              Organizations:
-                  - *${orgName}
-              Capabilities:
-                <<: *ApplicationCapabilities
       Channel: &ChannelDefaults
         Policies:
           Readers:
@@ -101,6 +91,31 @@ async function updateStatus() {
             Rule: "ANY Admins"
         Capabilities:
           <<: *ChannelCapabilities
+      Profiles:
+        OneOrgChannel:
+          <<: *ChannelDefaults
+          Consortium: SingleMemberConsortium
+          Application:
+              Organizations:
+                  - *${orgName}
+              Capabilities:
+                <<: *ApplicationCapabilities
+              Policies:
+                Readers:
+                  Type: ImplicitMeta
+                  Rule: ANY Readers
+                Writers:
+                  Type: ImplicitMeta
+                  Rule: ANY Writers
+                Admins:
+                  Type: ImplicitMeta
+                  Rule: ANY Admins
+                LifecycleEndorsement:
+                  Type: ImplicitMeta
+                  Rule: ANY Endorsement
+                Endorsement:
+                  Type: ImplicitMeta
+                  Rule: ANY Endorsement
     `
   
     fs.writeFileSync('./configtx.yaml', configTxYaml)
