@@ -834,6 +834,7 @@ app.post('/chaincodes/invoke', async (req, res) => {
     args.unshift(fcn)
     await executeCommand(`peer chaincode invoke -C ${channelName} -n ${chaincodeName} -c '{"Args":${JSON.stringify(args)}}'`)
     res.send({message: 'Invoked successfully'})
+    return;
 
     /* JS code works fine but the issue is we have to calculate the targets for endorsement manually using endorsment policy and collections config policies. peer invoke does this for us */
     /*
@@ -973,7 +974,7 @@ app.post('/chaincodes/invoke', async (req, res) => {
     
     */
   } catch(error) {
-    error_message = error.toString();
+    error_message = error;
   }
 
   if (!error_message) {
