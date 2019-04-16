@@ -391,12 +391,17 @@ app.post('/chaincodes/install', async (req, res) => {
     chaincodePath = `${shareFileDir}/chaincodes/${chaincodeName}/${version}/${langauge}`
   }
 
+  /* Place indexes in META-INF/statedb/couchdb/indexes. For private collections: META-INF/statedb/couchdb/collections/<collection_name>/indexes */
+
   if(langauge === 'golang') {
     //for golang some sort of extra steps are required for installing chaincode.....otherwise not found module error is thrown. 
     //peer install command does those automatically.
     await executeCommand(`peer chaincode install -n ${chaincodeName} -p ${chaincodePath} -v ${version} -l golang`)
     res.send({message: 'Chaincode installed successfully'})
   } else {
+
+    let indexesExist = fs.existsSync(`${chaincodePath}/META-INF`)
+
     let request = {
       targets: [`peer0.peer.${orgName.toLowerCase()}.com`],
       chaincodePath,
@@ -404,6 +409,10 @@ app.post('/chaincodes/install', async (req, res) => {
       chaincodeVersion: version,
       chaincodeType: langauge
     };
+
+    if(indexesExist) {
+      request.metadataPath = `${chaincodePath}/META-INF`
+    }
   
     let results = await client.installChaincode(request);
     let proposalResponses = results[0];
