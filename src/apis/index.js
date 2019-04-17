@@ -76,7 +76,7 @@ app.get('/config/cryptoConfig', async (req, res) => {
 app.post('/channel/create', async (req, res) => {
   let channelName = req.body.name.toLowerCase()
   let ordererURL = req.body.ordererURL
-  let ordererOrgName = req.body.ordererOrgName.toLowerCase()
+  let ordererDomain = req.body.ordererDomain
 
   shell.cd(shareFileDir)
   shell.exec(`FABRIC_CFG_PATH=$PWD configtxgen -profile OneOrgChannel -outputCreateChannelTx ./${channelName}.tx -channelID ${channelName}`)
@@ -86,12 +86,12 @@ app.post('/channel/create', async (req, res) => {
   if(!networkMap.channels[channelName]) {
     networkMap.channels[channelName] = {
       "orderers": [
-        `orderer.${ordererOrgName}.com`
+        ordererDomain
       ],
       "peers": {}
     }
 
-    networkMap.orderers[`orderer.${ordererOrgName}.com`] = {
+    networkMap.orderers[ordererDomain] = {
       "url": `grpc://${ordererURL}`
     }
 
@@ -171,7 +171,7 @@ app.post('/channel/create', async (req, res) => {
 app.post('/channel/join', async (req, res) => {
   let channelName = req.body.name.toLowerCase()
   let ordererURL = req.body.ordererURL
-  let ordererOrgName = req.body.ordererOrgName.toLowerCase()
+  let ordererDomain = req.body.ordererDomain
 
   shell.cd(shareFileDir)
 
@@ -180,12 +180,12 @@ app.post('/channel/join', async (req, res) => {
   if(!networkMap.channels[channelName]) {
     networkMap.channels[channelName] = {
       "orderers": [
-        `orderer.${ordererOrgName}.com`
+        ordererDomain
       ],
       "peers": {}
     }
 
-    networkMap.orderers[`orderer.${ordererOrgName}.com`] = {
+    networkMap.orderers[ordererDomain] = {
       "url": `grpc://${ordererURL}`
     }
 
