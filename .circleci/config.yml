@@ -71,25 +71,22 @@ jobs:
 
 workflows:
   version: 2
-  build-and-push:
-    jobs:
-      - checkout_code:
-          <<: *deploy_tag_filters
-
-      - docker_push:
-          <<: *deploy_tag_filters
-          requires:
-            - checkout_code
-          context: aws-creds
-
-      - check_approval:
-          <<: *deploy_tag_filters
-          type: approval
-          requires:
-            - docker_push
-
-      - notify_update:
-          <<: *deploy_tag_filters
-          requires:
-            - check_approval
-          context: aws-creds
+  # build-and-push:
+  #   jobs:
+  #     - checkout_code:
+  #         <<: *deploy_tag_filters
+  #     - docker_push:
+  #         <<: *deploy_tag_filters
+  #         requires:
+  #           - checkout_code
+  #         context: aws-creds
+  #     - check_approval:
+  #         <<: *deploy_tag_filters
+  #         type: approval
+  #         requires:
+  #           - docker_push
+  #     - notify_update:
+  #         <<: *deploy_tag_filters
+  #         requires:
+  #           - check_approval
+  #         context: aws-creds
