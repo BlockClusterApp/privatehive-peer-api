@@ -2,6 +2,12 @@
 
 export COMMIT_HASH=${CIRCLE_SHA1}
 
+if [ ! -z "$JENKINS_HOME" ];
+then
+  export CIRCLE_BRANCH="$BRANCH_NAME"
+  export COMMIT_HASH="$GIT_COMMIT"
+fi
+
 if [ "$CIRCLE_BRANCH" = "master" ] || [ "$CIRCLE_TAG" = "production" ];
 then
     export NODE_ENV="production"
